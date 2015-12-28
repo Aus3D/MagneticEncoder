@@ -1,0 +1,34 @@
+Protel Design System Design Rule Check
+PCB File : F:\Dropbox\Aus3D\products\stepperController\encoderBreakout1\encoderBreakout1.PcbDoc
+Date     : 12/27/2015
+Time     : 3:07:12 PM
+
+Processing Rule : Short-Circuit Constraint (Allowed=No) (All),(All)
+   Violation between Track (-5.881mm,4mm)(-5.119mm,4mm)  Bottom Layer and 
+                     Pad SJ1-2(-6.008mm,4mm)  Bottom Layer
+   Violation between Track (-5.881mm,4mm)(-5.119mm,4mm)  Bottom Layer and 
+                     Track (-6.008mm,3.258mm)(-6.008mm,4mm)  Bottom Layer
+Rule Violations :2
+
+Processing Rule : Un-Routed Net Constraint ( (All) )
+Rule Violations :0
+
+Processing Rule : Clearance Constraint (Gap=0.2mm) (All),(All)
+   Violation between Track (-5.881mm,4mm)(-5.119mm,4mm)  Bottom Layer and 
+                     Pad SJ1-2(-6.008mm,4mm)  Bottom Layer
+   Violation between Track (-5.881mm,4mm)(-5.119mm,4mm)  Bottom Layer and 
+                     Track (-6.008mm,3.258mm)(-6.008mm,4mm)  Bottom Layer
+Rule Violations :2
+
+Processing Rule : Power Plane Connect Rule(Relief Connect )(Expansion=0.508mm) (Conductor Width=0.254mm) (Air Gap=0.254mm) (Entries=4) (All)
+Rule Violations :0
+
+Processing Rule : Width Constraint (Min=0.2mm) (Max=1mm) (Preferred=0.25mm) (All)
+Rule Violations :0
+
+Processing Rule : Hole Size Constraint (Min=0.025mm) (Max=3.5mm) (All)
+Rule Violations :0
+
+
+Violations Detected : 4
+Time Elapsed        : 00:00:01
