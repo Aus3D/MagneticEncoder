@@ -1,0 +1,14 @@
+Bill of Material for 
+On 1/21/2016 at 5:07:07 PM
+
+ Comment             Pattern     Quantity  Components
+------------------------------------------------------------------------------
+ 32-Pin Atmega328 part Commonly used on Arduino compatible boards Available in QFP and QFN packages TQFP is IC-09069 QFN is non-stock MLF32-PAD        1    U2                                                
+ approved sub OK     CAPC1608X90N     5    C1, C2, C3, C5, C6           Capacitor SMD Cer 100nF 10% 50V X7R 0603 
+ approved sub OK     CAPC2012X135N    1    C4                           Capacitor SMD Cer 10uF 10% 10V X5R 0805 
+ AS5311              TSSOP-20         1    U1                           AMS's AS5311 linear hall-effect encoder. 
+ ICSP                ICSP Pads - SMD    1    P2                           Header, 3-Pin, Dual row 
+ JST-SH 4P           SM04B-SRSS-TB    1    P1                                                
+ JUMPER-PAD-2-NC_BY_TRACE PAD-JUMPER-2-NC_BY_TRACE_YES_SILK    2    ADR1, ADR2                                        
+ JUMPER-PAD-2-NO     PAD-JUMPER-2-NO_NO_SILK    1    3V                                                
+ WS2812B3535         LED3535          2    LED1, LED2                                        
