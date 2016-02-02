@@ -1,7 +1,7 @@
 Protel Design System Design Rule Check
 PCB File : C:\Users\Chris\Documents\Git\magneticEncoder\as5311-module\as5311-module.PcbDoc
-Date     : 1/22/2016
-Time     : 5:33:34 PM
+Date     : 2/2/2016
+Time     : 11:13:49 AM
 
 Processing Rule : Hole Size Constraint (Min=0.025mm) (Max=3.5mm) (All)
 Rule Violations :0
@@ -13,32 +13,14 @@ Processing Rule : Power Plane Connect Rule(Relief Connect )(Expansion=0.508mm) (
 Rule Violations :0
 
 Processing Rule : Clearance Constraint (Gap=0.15mm) (All),(All)
-   Violation between Via (0mm,-1.5mm) Top Layer to Bottom Layer and 
-                     Pad U2-21(0mm,-1.5mm)  Bottom Layer
-   Violation between Track (-5.292mm,-6.7mm)(-4.492mm,-6.7mm)  Bottom Layer and 
-                     Pad ADR2-2(-4.492mm,-6.7mm)  Bottom Layer
-   Violation between Track (-5.292mm,-8.5mm)(-4.492mm,-8.5mm)  Bottom Layer and 
-                     Pad ADR1-1(-5.508mm,-8.5mm)  Bottom Layer
-   Violation between Track (-5.292mm,-8.5mm)(-4.492mm,-8.5mm)  Bottom Layer and 
-                     Track (-5.481mm,-8.5mm)(-5.481mm,-7.6mm)  Bottom Layer
-   Violation between Track (-4.269mm,-6.7mm)(-3.9mm,-6.7mm)  Bottom Layer and 
-                     Track (-5.292mm,-6.7mm)(-4.492mm,-6.7mm)  Bottom Layer
-Rule Violations :5
+Rule Violations :0
 
 Processing Rule : Un-Routed Net Constraint ( (All) )
 Rule Violations :0
 
 Processing Rule : Short-Circuit Constraint (Allowed=No) (All),(All)
-   Violation between Via (0mm,-1.5mm) Top Layer to Bottom Layer and 
-                     Pad U2-21(0mm,-1.5mm)  Bottom Layer
-   Violation between Track (-5.292mm,-6.7mm)(-4.492mm,-6.7mm)  Bottom Layer and 
-                     Pad ADR2-2(-4.492mm,-6.7mm)  Bottom Layer
-   Violation between Track (-5.292mm,-8.5mm)(-4.492mm,-8.5mm)  Bottom Layer and 
-                     Pad ADR1-1(-5.508mm,-8.5mm)  Bottom Layer
-   Violation between Track (-5.292mm,-8.5mm)(-4.492mm,-8.5mm)  Bottom Layer and 
-                     Track (-5.481mm,-8.5mm)(-5.481mm,-7.6mm)  Bottom Layer
-Rule Violations :4
+Rule Violations :0
 
 
-Violations Detected : 9
-Time Elapsed        : 00:00:01
+Violations Detected : 0
+Time Elapsed        : 00:00:00
