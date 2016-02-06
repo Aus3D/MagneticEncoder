@@ -1,0 +1,13 @@
+Designator,Footprint,Mid X,Mid Y,Ref X,Ref Y,Pad X,Pad Y,Layer,Rotation,Comment
+,,,,,,,,,,
+LED2,LED3535,-0.0013mm,-9.493mm,0mm,-9.5mm,1.75mm,-8.611mm,B,180,WS2812B3535
+LED1,LED3535,0.0013mm,-9.493mm,0mm,-9.5mm,-1.75mm,-8.611mm,T,0,WS2812B3535
+C1,CAPC1608X90N,-4.5mm,0.75mm,-4.5mm,0.75mm,-4.5mm,1.6mm,T,270,approved sub OK
+C2,CAPC1608X90N,-6.25mm,0.75mm,-6.25mm,0.75mm,-6.25mm,1.6mm,T,270,approved sub OK
+C3,CAPC1608X90N,-8mm,0.75mm,-8mm,0.75mm,-8mm,1.6mm,T,270,approved sub OK
+C5,CAPC1608X90N,0.15mm,3.2mm,0.15mm,3.2mm,1mm,3.2mm,B,180,approved sub OK
+C4,CAPC1608X90N,0.15mm,1.4mm,0.15mm,1.4mm,1.0001mm,1.4mm,B,180,approved sub OK
+U1,TSSOP-20,0.1055mm,0.0117mm,0.75mm,0mm,-2.825mm,-3.05mm,T,0,AS5311
+P1,SM04B-SRSS-TB,0.25mm,9.45mm,1.75mm,7.5mm,0.75mm,7.5mm,B,90,JST-SH 4P
+U2,20M2_N,0mm,-1.5mm,0mm,-1.5mm,-1.525mm,-2.4mm,B,360,ATtiny20-MMH
+R1,RESC1608X55N,2.9mm,5.3mm,2.9mm,5.3mm,2.05mm,5.3mm,T,0,Thick Film
