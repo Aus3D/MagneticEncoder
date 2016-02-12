@@ -1,5 +1,5 @@
 ---------------------------------------------------------------------------
-NCDrill File Report For: as5311-module.PcbDoc   1/22/2016  5:47:05 PM
+NCDrill File Report For: as5311-module.PcbDoc   2/6/2016  6:51:15 PM
 ---------------------------------------------------------------------------
 
 Layer Pair : Top Layer to Bottom Layer
@@ -7,12 +7,11 @@ ASCII RoundHoles File : as5311-module.TXT
 
 Tool         Hole Size           Hole Type     Hole Count Plated       Tool Travel
 ---------------------------------------------------------------------------
-T1        0.2mm (7.874mil)         Round          1                0.00 mm (0.00 Inch)
-T2        0.25mm (9.842mil)        Round          16               73.95 mm (2.91 Inch)
-T3        0.3mm (11.811mil)        Round          6                12.70 mm (0.50 Inch)
-T4        1.016mm (40mil)          Round          4                7.66 mm (0.30 Inch)
-T5        3.2mm (125.984mil)       Round          4                60.00 mm (2.36 Inch)
+T1        0.25mm (9.842mil)        Round          14               82.80 mm (3.26 Inch)
+T2        0.5mm (19.685mil)        Round          6                12.70 mm (0.50 Inch)
+T3        0.9mm (35.433mil)        Round          4                7.62 mm (0.30 Inch)
+T4        3.2mm (125.984mil)       Round          4                60.00 mm (2.36 Inch)
 ---------------------------------------------------------------------------
-Totals                                            31               154.31 mm (6.08 Inch)
+Totals                                            28               163.12 mm (6.42 Inch)
 
 Total Processing Time (hh:mm:ss) : 00:00:00
