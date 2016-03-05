@@ -17,13 +17,16 @@
  * 2: Sets this modules I2C address to the next byte received, 
  *    saves in EEPROM
  *    
- * 3: Sets the brightness of the LED indicator to the next byte received, 
- *    saves in EEPROM
- *    
- * 4: Responds with the current magnetic strength as reported by the encoder.
+ * 3: Responds with the current magnetic strength as reported by the encoder.
  *      0: Signal good, in range.
  *      1: Signal weak, edge of range (but probably useable)
  *      2: Signal weak / lost, edge / outside of range (probably not useable)
+ *
+ * 4: Sets the brightness of the LEDs to the next two bytes received, 
+ *    saves in EEPROM
+ *
+ * 5: Sets the mode of the LEDs to the next two bytes received, 
+ *    saves in EEPROM
  * 
  * 
  * Address configuration
@@ -36,6 +39,31 @@
  *  0    1   |   Y
  *  1    0   |   Z
  *  1    1   |   E
+ *  
+ *  
+ *  
+ *  LED Modes:
+ *  
+ *  0     Status indication of magnetic field
+ *  1     Solid White
+ *  2     Solid Red
+ *  3     Solid Green
+ *  4     Solid Blue
+ *  5     RGB Value
+ *  6     HSV Value
+ *  7     Party Mode 1
+ *  8     Party Mode 2
+ *  9     Party Mode 3
+ *  10    Reactive Mode 1 (Speed)
+ *  11    Reactive Mode 2 (Acceleration)
+ *  12    Reactive Mode 3 (Direction)
+ *  
+ *  Additional LED Settings:
+ *  
+ *  Brightness    Universal to all modes
+ *  Rate          
+ *  Sleep
+ *              
  /---------------------------------------------------------------/
  */
 #include <Wire.h>
@@ -54,15 +82,18 @@
 #define ADDR1_PIN   16
 #define ADDR2_PIN   17
 
-#define SERIAL_PERIOD 10
+#define LOOP_TIME_US 20000
 #define TICKS_PER_MM 2048
 #define NM_PER_TICK 1950
 
 //#define SERIAL_ENABLED
-//#define PARTY_TIME
 
 #define EEPROM_I2C_ADDR 1
-#define EEPROM_BRT_ADDR 2
+#define EEPROM_BRT1_ADDR 2
+#define EEPROM_BRT2_ADDR 3
+#define EEPROM_MODE1_ADDR 4
+#define EEPROM_MODE2_ADDR 5
+
 
 const byte i2c_base_address = 30;
 byte i2c_address;
@@ -80,9 +111,11 @@ long revolutions = 0;
 long offset = 0;
 long totalCount = 0;
 bool offsetInitialised = false;
+long avgSpeed = 0;
 
 float mm = 0;
 float oldMm = -999;
+float prevMm = 0;
 
 bool OCF = false;
 bool COF = false;
@@ -90,12 +123,13 @@ bool LIN = false;
 bool mINC = false;
 bool mDEC = false;
 
-unsigned long lastSerialTime = 0;
+unsigned long lastLoopTime = 0;
 
 byte addressOffset;
 
-int ledBrightness = 50;
-int ledMode = 0;
+int ledBrightness[] = {50,50};
+int ledMode[] = {0,0};
+byte ledR = 255, ledG = 0, ledB = 0;
 
 CRGB leds[PIXEL_NUM];
 
@@ -126,40 +160,33 @@ void setup() {
     //otherwise we always over-ride the hardware setting
     if(tempOffset != 99) 
       addressOffset = tempOffset;
-    ledBrightness = EEPROM.read(EEPROM_BRT_ADDR);
+
+    ledMode[0] = EEPROM.read(EEPROM_MODE1_ADDR);
+    ledMode[1] = EEPROM.read(EEPROM_MODE2_ADDR);
+    ledBrightness[0] = EEPROM.read(EEPROM_BRT1_ADDR);
+    ledBrightness[1] = EEPROM.read(EEPROM_BRT2_ADDR);
   }
 
   FastLED.addLeds<NEOPIXEL, PIXEL_PIN>(leds, PIXEL_NUM);
-  FastLED.setBrightness(ledBrightness);
+  FastLED.setBrightness(255);
 
   //signal address
-  for(int i = 0; i < addressOffset+1; i++) {
-    fill_solid( &(leds[0]), 2, CRGB::White);
+  for(int i = 0; i < addressOffset+1; i++) {  
+    for(int j = 0; j < PIXEL_NUM; j++) {
+      leds[j] = CRGB::White;
+      leds[j].nscale8(ledBrightness[i]);
+    }
     FastLED.show();
     delay(500);
-    fill_solid( &(leds[0]), 2, CRGB::Black);
+    for(int j = 0; j < PIXEL_NUM; j++) {
+      leds[j] = CRGB::Black;
+      leds[j].nscale8(ledBrightness[i]);
+    }
     FastLED.show();
     delay(500);
   }
 
   i2c_address = i2c_base_address + addressOffset;
-  
-  /*
-  switch(addressOffset) {
-    case 0:
-      setColour(50,0,0);
-      break;
-    case 1:
-      setColour(0,50,0);
-      break;
-    case 2:
-      setColour(0,0,50);
-      break;
-    case 3:
-      setColour(50,50,50);
-      break;
-  }
-  */
   
   delay(500);
   
@@ -177,31 +204,48 @@ void setup() {
 void loop() {
   
   updateEncoder();
-  serial_update();
+  uodateSerial();
+  updateLeds();
+  loopTiming();
 
-  if(ledMode == 0) {
-    if(mINC == false && mDEC == false) {
-      fill_solid( &(leds[0]), 2, CRGB::Green);
-      FastLED.show();
-    }
-  
-    if(mINC == true && mDEC == true && LIN == false) {
-      fill_solid( &(leds[0]), 2, CRGB::Yellow);
-      FastLED.show();
-    }
-  
-    if(mINC == true && mDEC == true && LIN == true) {
-      fill_solid( &(leds[0]), 2, CRGB::Red);
-      FastLED.show();
-    }
-  } else if(ledMode == 1) {
-    fill_solid( &(leds[0]), 2, CHSV(totalCount/100,255,100+revolutions*5));
-    FastLED.show();
-  } else if(ledMode == 2) {
-    fill_solid( &(leds[0]), 2, CRGB::White);
-    FastLED.show();
-  }
 }
+
+
+void updateLeds() {
+  for(int i = 0; i < PIXEL_NUM; i++) {
+    switch (ledMode[i]) {
+      case 0:
+        if(mINC == false && mDEC == false) { leds[i] = CRGB::Green; }
+        if(mINC == true && mDEC == true && LIN == false) { leds[i] = CRGB::Yellow; }
+        if(mINC == true && mDEC == true && LIN == true) { leds[i] = CRGB::Red; }
+        break;
+      case 1:
+        leds[i] = CRGB::White;
+        break;
+      case 2:
+        leds[i] = CRGB::Red;
+        break;
+      case 3:
+        leds[i] = CRGB::Green;
+        break;
+      case 4:
+        leds[i] = CRGB::Blue;
+        break;
+      case 5:
+        leds[i].setRGB(ledR,ledG,ledB);
+        break;
+      case 6:
+        leds[i].setHSV(ledR,ledG,ledB);
+        break;
+      case 7:
+        leds[i].setHSV(totalCount/100,255,255);
+        break;
+    }
+    leds[i].nscale8(ledBrightness[i]);
+  }
+  FastLED.show();
+}
+
 
 ////////////////////////////////////////////////////////////
 //----------------------- I2C ----------------------------//
@@ -217,6 +261,7 @@ void receiveEvent(int numBytes) {
 
   byte temp = Wire.read();
   byte temp2 = Wire.read();
+  byte temp3 = Wire.read();
 
   switch(temp) {
     case 1: 
@@ -226,17 +271,14 @@ void receiveEvent(int numBytes) {
       setI2cAddress(temp2);
       break;
     case 3:
-      setLedBrightness(temp2);
-      LEDS.setBrightness(ledBrightness);
-      FastLED.show();
-      break;
-    case 4:
       Wire.write(mINC + (mDEC*2)); 
-      break;    
+      break; 
+    case 4:
+      setLedBrightness(temp2,temp3);
+      break;   
     case 5:
-      ledMode = temp2;
-  }
-  
+      setLedMode(temp2,temp3);
+  }  
 }
 
 ////////////////////////////////////////////////////////////
@@ -260,8 +302,10 @@ void updateEncoder() {
 
   totalCount = (revolutions * 4092) + (count + offset);
   encoderCount.val = totalCount;
-  
+
+  prevMm = mm;
   mm = (float) (totalCount) /TICKS_PER_MM;
+  
 }
 
 int readPosition()
@@ -283,12 +327,9 @@ int readPosition()
   position |= d2;
   position = position >> 4;
 
-
-  //check the offset compensation flag: 1 == started up
   if (!(d2 & B00001000))
     OCF = true;
 
-  //check the offset compensation flag: 1 == started up
   if (!(d2 & B00000100))
     COF = true;
 
@@ -330,22 +371,32 @@ byte shiftIn(byte data_pin, byte clock_pin)
 void reinitialize()
 {
   setI2cAddress(99);
-  setLedBrightness(ledBrightness);
+  setLedBrightness(ledBrightness[0],ledBrightness[1]);
+  setLedMode(ledMode[0],ledMode[1]);
 }
 
 void setI2cAddress(byte i2cAddress) {
-  EEPROM.put(1, i2cAddress);
+  EEPROM.put(EEPROM_I2C_ADDR, i2cAddress);
 }
 
-void setLedBrightness(byte brightness) {
-  ledBrightness = brightness;
-  EEPROM.put(2, ledBrightness);
+void setLedBrightness(byte brightness1, byte brightness2) {
+  ledBrightness[0] = brightness1;
+  ledBrightness[1] = brightness2;
+  EEPROM.put(EEPROM_BRT1_ADDR, ledBrightness[0]);
+  EEPROM.put(EEPROM_BRT2_ADDR, ledBrightness[1]);
+}
+
+void setLedMode(byte mode1, byte mode2) {
+  ledMode[0] = mode1;
+  ledMode[1] = mode2;
+  EEPROM.put(EEPROM_MODE1_ADDR, ledMode[0]);
+  EEPROM.put(EEPROM_MODE2_ADDR, ledMode[1]);
 }
 
 ////////////////////////////////////////////////////////////
 //---------------------- SERIAL --------------------------//
 ////////////////////////////////////////////////////////////
-void serial_update() {
+void updateSerial() {
   #ifdef SERIAL_ENABLED
     if(Serial.available() > 0) {
       if(Serial.read() == 'r' || Serial.read() == 'R') {
@@ -355,7 +406,7 @@ void serial_update() {
       }
     }
 
-    if(millis() - lastSerialTime > SERIAL_PERIOD){// && (abs(mm - oldMm) > 0.01)) {
+    //if(millis() - lastSerialTime > SERIAL_PERIOD){// && (abs(mm - oldMm) > 0.01)) {
       Serial.print(count);
       Serial.print("\t");
       Serial.print(mm,3);
@@ -366,8 +417,38 @@ void serial_update() {
       Serial.println();
       lastSerialTime = millis();
       oldMm = mm;
-    } else {
-      delay(1);  
-    }
+    //} else {
+    //  delay(1);  
+    //}
   #endif
+}
+
+////////////////////////////////////////////////////////////
+//------------------------ MISC --------------------------//
+////////////////////////////////////////////////////////////
+
+
+void loopTiming() {
+  while(micros() - lastLoopTime < LOOP_TIME_US) {
+    delayMicroseconds(20);
+  }
+  lastLoopTime = micros();
+}
+
+long runningAverage(long M) {
+  #define LM_SIZE 20
+  static long LM[LM_SIZE];      // LastMeasurements
+  static byte index = 0;
+  static long sum = 0;
+  static byte count = 0;
+
+  // keep sum updated to improve speed.
+  sum -= LM[index];
+  LM[index] = M;
+  sum += LM[index];
+  index++;
+  index = index % LM_SIZE;
+  if (count < LM_SIZE) count++;
+
+  return sum / count;
 }
