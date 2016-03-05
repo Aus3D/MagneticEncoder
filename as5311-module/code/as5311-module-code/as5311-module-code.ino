@@ -117,6 +117,10 @@
 #define EEPROM_HSV2_ADDR 14
 #define EEPROM_HSV3_ADDR 15
 
+#define I2C_MAG_SIG_GOOD 0
+#define I2C_MAG_SIG_MID 1
+#define I2C_MAG_SIG_BAD 2
+
 
 const byte i2c_base_address = 30;
 byte i2c_address;
@@ -279,7 +283,9 @@ void requestEvent() {
       Wire.write(encoderCount.bval,4);
       break;
     case 1:
-      Wire.write(mINC + (mDEC*2));
+      if(mINC == false && mDEC == false) { Wire.write(I2C_MAG_SIG_GOOD); }
+      if(mINC == true && mDEC == true && LIN == false) { Wire.write(I2C_MAG_SIG_MID); }
+      if(mINC == true && mDEC == true && LIN == true) { Wire.write(I2C_MAG_SIG_BAD); }
       break;
   }
 }
