@@ -7,29 +7,48 @@
  * and report the current position as observed by the magnetic encoder.
  * 
  * The following I2C commands are implemented:
- * 
- * 0: Responds with 4 bytes reporting distance from encoder. 
- *    Measured in encoder count, distance should be calculated by external controller.
- *    Also sent if no valid command received.
  *    
  * 1: Resets travelled distance to zero
  * 
  * 2: Sets this modules I2C address to the next byte received, 
  *    saves in EEPROM
  *    
- * 3: Responds with the current magnetic strength as reported by the encoder.
- *      0: Signal good, in range.
- *      1: Signal weak, edge of range (but probably useable)
- *      2: Signal weak / lost, edge / outside of range (probably not useable)
+ * 3: Set the information that will be sent on the next I2C request.
+ *      0: Default, responds with encoder count
+ *      1: Responds with magnetic signal strength
+ *            0: Signal good, in range.
+ *            1: Signal weak, edge of range (but probably useable)
+ *            2: Signal weak / lost, edge / outside of range (probably not useable)
  *
- * 4: Sets the brightness of the LEDs to the next two bytes received, 
+ * 4: Clear the settings saved in EEPROM, restorind all defaults
+ *      Handy to return to hardware I2C address if required
+ *      A power cycle will be required for settings to reset
+ *
+ * 10: Sets the mode of the LEDs to the next two bytes received, 
  *    saves in EEPROM
  *
- * 5: Sets the mode of the LEDs to the next two bytes received, 
+ * 11: Sets the brightness of the LEDs to the next two bytes received, 
  *    saves in EEPROM
+ *
+ * 12: Sets the RGB value for the LEDs to the next three bytes received
+ *     LEDs must still be set to RGB mode to display the sent value.
+ *
+ * 13: Sets the HSV value for the LEDs to the next three bytes received
+ *     LEDs must still be set to HSV mode to display the sent value.
+ *
+ * 14: Set the rate variable for both LEDs to the next two bytes received
+ *      Rate is used in some of the different LED modes
+ *
+ * 15: Set the sleep time for both LEDs to the next two bytes received.
+ *      Sleep time determines how the LEDs will behave when there is no axis motion
+ *            0: LED always on regardless of axis       (default)
+ *            1-255: LED will turn off if there has been no significant
+ *                   axis motion for this number of seconds.      
+ *
  * 
- * 
- * Address configuration
+ * I2C address can either be set over I2C (as shown above), or configured by cutting jumper traces on PCB.
+ * If the address has been set by I2C, it can only be overridden by setting a new address over I2C, or by
+ * sending the I2C command to reset the EEPROM.
  * 
  * 0 = default
  * 1 = trace cut
@@ -58,11 +77,6 @@
  *  11    Reactive Mode 2 (Acceleration)
  *  12    Reactive Mode 3 (Direction)
  *  
- *  Additional LED Settings:
- *  
- *  Brightness    Universal to all modes
- *  Rate          
- *  Sleep
  *              
  /---------------------------------------------------------------/
  */
@@ -70,7 +84,7 @@
 #include <EEPROM.h>
 #include "FastLED.h"
 
-#define SCHEMA 0x0101
+#define SCHEMA 5
 
 #define PIXEL_PIN   7
 #define PIXEL_NUM   2
@@ -84,7 +98,6 @@
 
 #define LOOP_TIME_US 20000
 #define TICKS_PER_MM 2048
-#define NM_PER_TICK 1950
 
 //#define SERIAL_ENABLED
 
@@ -93,10 +106,21 @@
 #define EEPROM_BRT2_ADDR 3
 #define EEPROM_MODE1_ADDR 4
 #define EEPROM_MODE2_ADDR 5
+#define EEPROM_RATE1_ADDR 6
+#define EEPROM_RATE2_ADDR 7
+#define EEPROM_SLP1_ADDR 8
+#define EEPROM_SLP2_ADDR 9
+#define EEPROM_RGB1_ADDR 10
+#define EEPROM_RGB2_ADDR 11
+#define EEPROM_RGB3_ADDR 12
+#define EEPROM_HSV1_ADDR 13
+#define EEPROM_HSV2_ADDR 14
+#define EEPROM_HSV3_ADDR 15
 
 
 const byte i2c_base_address = 30;
 byte i2c_address;
+int i2c_response_mode = 0;
 
 typedef union{
     volatile long val;
@@ -129,7 +153,11 @@ byte addressOffset;
 
 int ledBrightness[] = {50,50};
 int ledMode[] = {0,0};
-byte ledR = 255, ledG = 0, ledB = 0;
+int ledRate[] = {0,0};
+int ledSleep[] = {0,0};
+
+byte ledRGB[] = {255,0,0};
+byte ledHSV[] = {255,255,255};
 
 CRGB leds[PIXEL_NUM];
 
@@ -146,47 +174,24 @@ void setup() {
   pinMode(ADDR2_PIN,INPUT_PULLUP);
   
   addressOffset = digitalRead(ADDR1_PIN) + 2*(digitalRead(ADDR2_PIN));
-
-  short schema;
-  EEPROM.get(0, schema);
-  if (schema != SCHEMA) {
-    reinitialize();
-    schema = SCHEMA;
-    EEPROM.write(0, schema);
-  } else {
-    byte tempOffset = EEPROM.read(EEPROM_I2C_ADDR);
-
-    //check that a value has actually been set,
-    //otherwise we always over-ride the hardware setting
-    if(tempOffset != 99) 
-      addressOffset = tempOffset;
-
-    ledMode[0] = EEPROM.read(EEPROM_MODE1_ADDR);
-    ledMode[1] = EEPROM.read(EEPROM_MODE2_ADDR);
-    ledBrightness[0] = EEPROM.read(EEPROM_BRT1_ADDR);
-    ledBrightness[1] = EEPROM.read(EEPROM_BRT2_ADDR);
-  }
-
+  i2c_address = i2c_base_address + addressOffset;
+  
   FastLED.addLeds<NEOPIXEL, PIXEL_PIN>(leds, PIXEL_NUM);
   FastLED.setBrightness(255);
 
-  //signal address
-  for(int i = 0; i < addressOffset+1; i++) {  
-    for(int j = 0; j < PIXEL_NUM; j++) {
-      leds[j] = CRGB::White;
-      leds[j].nscale8(ledBrightness[i]);
-    }
-    FastLED.show();
-    delay(500);
-    for(int j = 0; j < PIXEL_NUM; j++) {
-      leds[j] = CRGB::Black;
-      leds[j].nscale8(ledBrightness[i]);
-    }
-    FastLED.show();
-    delay(500);
+  if (EEPROM.read(0) != SCHEMA) {
+    reinitialize();
+    EEPROM.write(0, SCHEMA);
+    blinkLeds(1,CRGB::Purple);
+  } else {
+    eepromLoad();
+    blinkLeds(1,CRGB::Green);
   }
 
-  i2c_address = i2c_base_address + addressOffset;
+  //signal address
+  if(i2c_address >= i2c_base_address && i2c_address < i2c_base_address + 4) {
+    blinkLeds(i2c_address - i2c_base_address + 1,CRGB::White);
+  }
   
   delay(500);
   
@@ -202,14 +207,11 @@ void setup() {
 }
 
 void loop() {
-  
   updateEncoder();
-  uodateSerial();
+  updateSerial();
   updateLeds();
-  loopTiming();
-
+  //loopTiming();   //timing seems to prevent module from working at high travel speeds. Better for now just to run as fast as possible, will revisit later.
 }
-
 
 void updateLeds() {
   for(int i = 0; i < PIXEL_NUM; i++) {
@@ -232,18 +234,37 @@ void updateLeds() {
         leds[i] = CRGB::Blue;
         break;
       case 5:
-        leds[i].setRGB(ledR,ledG,ledB);
+        leds[i].setRGB(ledRGB[0],ledRGB[1],ledRGB[2]);
         break;
       case 6:
-        leds[i].setHSV(ledR,ledG,ledB);
+        leds[i].setHSV(ledHSV[0],ledHSV[1],ledHSV[2]);
         break;
       case 7:
-        leds[i].setHSV(totalCount/100,255,255);
+        leds[i].setHSV(totalCount/10*ledRate[i],255,255);
         break;
     }
     leds[i].nscale8(ledBrightness[i]);
   }
   FastLED.show();
+}
+
+void blinkLeds(int times, const CRGB& rgb) {
+  
+  for(int i = 0; i < times; i++) {  
+    for(int j = 0; j < PIXEL_NUM; j++) {
+      leds[j] = rgb;
+      leds[j].nscale8(20);
+      //leds[j].nscale8(ledBrightness[j]);
+    }
+    FastLED.show();
+    delay(500);
+    for(int j = 0; j < PIXEL_NUM; j++) {
+      leds[j] = CRGB::Black;
+      leds[j].nscale8(ledBrightness[j]);
+    }
+    FastLED.show();
+    delay(500);
+  }
 }
 
 
@@ -253,31 +274,57 @@ void updateLeds() {
 
 void requestEvent() {
 
-  Wire.write(encoderCount.bval,4); 
-
+  switch (i2c_response_mode) {
+    case 0:
+      Wire.write(encoderCount.bval,4);
+      break;
+    case 1:
+      Wire.write(mINC + (mDEC*2));
+      break;
+  }
 }
 
 void receiveEvent(int numBytes) {
 
-  byte temp = Wire.read();
-  byte temp2 = Wire.read();
-  byte temp3 = Wire.read();
+  byte temp[5] = {0};
+  int tempIndex = 0;
 
-  switch(temp) {
+  while(Wire.available() > 0) {
+    temp[tempIndex] = Wire.read();
+    tempIndex++;
+  }
+
+  switch(temp[0]) {
     case 1: 
       offset = totalCount;
       break;
     case 2:
-      setI2cAddress(temp2);
+      setI2cAddress(temp[1]);
       break;
     case 3:
-      Wire.write(mINC + (mDEC*2)); 
+      i2c_response_mode = temp[1];
       break; 
     case 4:
-      setLedBrightness(temp2,temp3);
+      eepromClear();
+      break; 
+    case 10:
+      setLedMode(temp[1],temp[2]);
+      break;
+    case 11:
+      setLedBrightness(temp[1],temp[2]);
+      break;  
+    case 12:
+      setLedRGB(temp[1],temp[2],temp[3]);
       break;   
-    case 5:
-      setLedMode(temp2,temp3);
+    case 13:
+      setLedHSV(temp[1],temp[2],temp[3]);
+      break;   
+    case 14:
+      setLedRate(temp[1],temp[2]);
+      break;    
+    case 15:
+      setLedSleep(temp[1],temp[2]);
+      break;   
   }  
 }
 
@@ -305,7 +352,7 @@ void updateEncoder() {
 
   prevMm = mm;
   mm = (float) (totalCount) /TICKS_PER_MM;
-  
+
 }
 
 int readPosition()
@@ -356,9 +403,7 @@ byte shiftIn(byte data_pin, byte clock_pin)
     delayMicroseconds(1);
 
     byte bit = digitalRead(data_pin);
-
     data |= (bit << i);
-
   }
 
   return data;
@@ -369,10 +414,39 @@ byte shiftIn(byte data_pin, byte clock_pin)
 ////////////////////////////////////////////////////////////
 
 void reinitialize()
-{
+{ 
+  eepromClear();
   setI2cAddress(99);
   setLedBrightness(ledBrightness[0],ledBrightness[1]);
   setLedMode(ledMode[0],ledMode[1]);
+  setLedRate(ledRate[0],ledRate[1]);
+  setLedSleep(ledSleep[0],ledSleep[1]);
+  setLedRGB(ledRGB[0],ledRGB[1],ledRGB[2]);
+  setLedHSV(ledHSV[0],ledHSV[1],ledHSV[2]);
+}
+
+void eepromLoad() {
+  byte tempAddress = EEPROM.read(EEPROM_I2C_ADDR);
+
+  //check that a value has actually been set,
+  //otherwise we use the hardware setting
+  if(tempAddress != 99) 
+    i2c_address = tempAddress; 
+
+  ledMode[0] = EEPROM.read(EEPROM_MODE1_ADDR);
+  ledMode[1] = EEPROM.read(EEPROM_MODE2_ADDR);
+  ledBrightness[0] = EEPROM.read(EEPROM_BRT1_ADDR);
+  ledBrightness[1] = EEPROM.read(EEPROM_BRT2_ADDR);
+  ledRate[0] = EEPROM.read(EEPROM_RATE1_ADDR);
+  ledRate[1] = EEPROM.read(EEPROM_RATE2_ADDR);
+  ledSleep[0] = EEPROM.read(EEPROM_SLP1_ADDR);
+  ledSleep[1] = EEPROM.read(EEPROM_SLP2_ADDR);
+  ledRGB[0] = EEPROM.read(EEPROM_RGB1_ADDR);
+  ledRGB[1] = EEPROM.read(EEPROM_RGB2_ADDR);
+  ledRGB[2] = EEPROM.read(EEPROM_RGB3_ADDR);
+  ledHSV[0] = EEPROM.read(EEPROM_HSV1_ADDR);
+  ledHSV[1] = EEPROM.read(EEPROM_HSV2_ADDR);
+  ledHSV[2] = EEPROM.read(EEPROM_HSV3_ADDR);
 }
 
 void setI2cAddress(byte i2cAddress) {
@@ -393,6 +467,44 @@ void setLedMode(byte mode1, byte mode2) {
   EEPROM.put(EEPROM_MODE2_ADDR, ledMode[1]);
 }
 
+void setLedRate(byte rate1, byte rate2) {
+  ledRate[0] = rate1;
+  ledRate[1] = rate2;
+  EEPROM.put(EEPROM_RATE1_ADDR, ledRate[0]);
+  EEPROM.put(EEPROM_RATE2_ADDR, ledRate[1]);
+}
+
+void setLedSleep(byte sleep1, byte sleep2) {
+  ledSleep[0] = sleep1;
+  ledSleep[1] = sleep2;
+  EEPROM.put(EEPROM_SLP1_ADDR, ledSleep[0]);
+  EEPROM.put(EEPROM_SLP2_ADDR, ledSleep[1]);
+}
+
+void setLedRGB(byte red, byte green, byte blue) {
+  ledRGB[0] = red;
+  ledRGB[1] = green;
+  ledRGB[2] = blue;
+  EEPROM.put(EEPROM_RGB1_ADDR, ledRGB[0]);
+  EEPROM.put(EEPROM_RGB2_ADDR, ledRGB[1]);
+  EEPROM.put(EEPROM_RGB3_ADDR, ledRGB[2]);
+}
+
+void setLedHSV(byte hue, byte sat, byte val) {
+  ledHSV[0] = hue;
+  ledHSV[1] = sat;
+  ledHSV[2] = val;
+  EEPROM.put(EEPROM_HSV1_ADDR, ledHSV[0]);
+  EEPROM.put(EEPROM_HSV2_ADDR, ledHSV[1]);
+  EEPROM.put(EEPROM_HSV3_ADDR, ledHSV[2]);
+}
+
+void eepromClear() {
+  for (int i = 0; i < EEPROM.length(); i++) {
+    EEPROM.write(i,0);
+  }
+}
+
 ////////////////////////////////////////////////////////////
 //---------------------- SERIAL --------------------------//
 ////////////////////////////////////////////////////////////
@@ -406,20 +518,17 @@ void updateSerial() {
       }
     }
 
-    //if(millis() - lastSerialTime > SERIAL_PERIOD){// && (abs(mm - oldMm) > 0.01)) {
-      Serial.print(count);
-      Serial.print("\t");
-      Serial.print(mm,3);
-      Serial.print("\t");
-      Serial.print(revolutions);
-      Serial.println(":");
-      Serial.print((revolutions * 4092) + (count + offset));
-      Serial.println();
-      lastSerialTime = millis();
-      oldMm = mm;
-    //} else {
-    //  delay(1);  
-    //}
+    Serial.print(count);
+    Serial.print("\t");
+    Serial.print(mm,3);
+    Serial.print("\t");
+    Serial.print(revolutions);
+    Serial.println(":");
+    Serial.print((revolutions * 4092) + (count + offset));
+    Serial.println();
+    lastSerialTime = millis();
+    oldMm = mm;
+
   #endif
 }
 
