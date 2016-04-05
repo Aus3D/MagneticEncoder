@@ -1,0 +1,12 @@
+Output: NC Drill Files
+Type  : NC Drill
+From  : Project [as5311-module.PrjPcb]
+   Generated File[as5311-module.TXT]
+   Generated File[as5311-module.LDP]
+   Generated File[as5311-module.DRR]
+
+
+Files Generated   : 3
+Documents Printed : 0
+
+Finished Output Generation At 1:17:11 AM On 3/27/2016
