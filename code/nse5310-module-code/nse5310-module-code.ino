@@ -1,7 +1,7 @@
 /*
  /---------------------------------------------------------------/
- * Code for the Aus3D AS5311 Magnetic Encoder I2C Module
- * Chris Barr, 2015
+ * Code for the Aus3D NSE5310 Magnetic Encoder I2C Module
+ * Chris Barr, 2016
  * 
  * This module is designed to connect to a host device via I2C,
  * and report the current position as observed by the magnetic encoder.
@@ -24,24 +24,24 @@
  *      Handy to return to hardware I2C address if required
  *      A power cycle will be required for settings to reset
  *
- * 5: Change the direction of motion
+ * 10: Sets the mode of the LEDs based on the next two bytes received, 
+ *     byte1 = led (0 or 1), byte 2 = mode (see below)
+ *     saves in EEPROM
  *
- * 10: Sets the mode of the LEDs to the next two bytes received, 
+ * 11: Sets the brightness of the LEDs based on the next two bytes received,
+ *    byte1 = led (0 or 1), byte 2 = brightness (0-255)
  *    saves in EEPROM
  *
- * 11: Sets the brightness of the LEDs to the next two bytes received, 
- *    saves in EEPROM
- *
- * 12: Sets the RGB value for the LEDs to the next three bytes received
+ * 12: Sets the RGB value for the LEDs to the next three bytes received,
  *     LEDs must still be set to RGB mode to display the sent value.
  *
- * 13: Sets the HSV value for the LEDs to the next three bytes received
+ * 13: Sets the HSV value for the LEDs to the next three bytes received,
  *     LEDs must still be set to HSV mode to display the sent value.
  *
- * 14: Set the rate variable for both LEDs to the next two bytes received
+ * 14: Set the rate variable of the LEDs based on the next two bytes received,
  *      Rate is used in some of the different LED modes
  *
- * 15: Set the sleep time for both LEDs to the next two bytes received.
+ * 15: Set the sleep time of the LEDs based on the next two bytes received,
  *      Sleep time determines how the LEDs will behave when there is no axis motion
  *            0: LED always on regardless of axis       (default)
  *            1-255: LED will turn off if there has been no significant
@@ -83,6 +83,7 @@
  /---------------------------------------------------------------/
  */
 #include <Wire.h>
+#include <SoftwareWire.h>
 #include <EEPROM.h>
 #include "FastLED.h"
 
@@ -91,18 +92,31 @@
 #define PIXEL_PIN   7
 #define PIXEL_NUM   2
 
-#define SELECT_PIN  4
-#define CLOCK_PIN   5
-#define DATA_PIN    6
+//Encoder Setup
+#define ENC_SELECT_PIN  4
+#define ENC_CLOCK_PIN   5
+#define ENC_DATA_PIN    6
+#define ENC_ADDR 0b1000000
 
+SoftwareWire encWire( ENC_DATA_PIN, ENC_CLOCK_PIN, true, true);
+
+//I2C Slave Setup
 #define ADDR1_PIN   16
 #define ADDR2_PIN   17
 
-#define LOOP_TIME_US 20000
-#define TICKS_PER_MM 2048
+#define I2C_MAG_SIG_GOOD 0
+#define I2C_MAG_SIG_MID 1
+#define I2C_MAG_SIG_BAD 2
 
-//#define SERIAL_ENABLED
+#define MAG_GOOD_RANGE 4
 
+const byte i2c_base_address = 30;
+byte i2c_address;
+int i2c_response_mode = 0;
+
+#define SERIAL_ENABLED
+
+//EEPROM Setup
 #define EEPROM_I2C_ADDR 1
 #define EEPROM_BRT1_ADDR 2
 #define EEPROM_BRT2_ADDR 3
@@ -118,19 +132,6 @@
 #define EEPROM_HSV1_ADDR 13
 #define EEPROM_HSV2_ADDR 14
 #define EEPROM_HSV3_ADDR 15
-#define EEPROM_DIR_ADDR 16
-
-#define I2C_MAG_SIG_GOOD 0
-#define I2C_MAG_SIG_MID 1
-#define I2C_MAG_SIG_BAD 2
-
-#define DIR_FORWARD 0
-#define DIR_REVERSE 1
-
-
-const byte i2c_base_address = 30;
-byte i2c_address;
-int i2c_response_mode = 0;
 
 typedef union{
     volatile long val;
@@ -138,16 +139,13 @@ typedef union{
 }i2cLong;
 
 i2cLong encoderCount;
-i2cLong fieldStrength;
 
 long count = 0;
 long oldCount = 0;
 long revolutions = 0;
 long offset = 0;
-long totalCount = 0;
 bool offsetInitialised = false;
 long avgSpeed = 0;
-int direction = DIR_FORWARD;
 
 float mm = 0;
 float oldMm = -999;
@@ -159,13 +157,15 @@ bool LIN = false;
 bool mINC = false;
 bool mDEC = false;
 
+byte magStrength = I2C_MAG_SIG_BAD;
+
 unsigned long lastLoopTime = 0;
 
 byte addressOffset;
 
-int ledBrightness[] = {50,50};
+int ledBrightness[] = {20,20};
 int ledMode[] = {0,0};
-int ledRate[] = {10,10};
+int ledRate[] = {0,0};
 int ledSleep[] = {0,0};
 
 byte ledRGB[] = {255,0,0};
@@ -174,19 +174,24 @@ byte ledHSV[] = {255,255,255};
 CRGB leds[PIXEL_NUM];
 
 void setup() {
-  //setup our pins
-  pinMode(DATA_PIN, INPUT);
-  pinMode(CLOCK_PIN, OUTPUT);
-  pinMode(SELECT_PIN, OUTPUT);
+
+  #ifdef SERIAL_ENABLED
+    Serial.begin(250000);
+    Serial.println("Serial comms initialised");
+  #endif
   
-  digitalWrite(CLOCK_PIN, HIGH);
-  digitalWrite(SELECT_PIN, HIGH);
-  
+  pinMode(ENC_SELECT_PIN, OUTPUT);
+
   pinMode(ADDR1_PIN,INPUT_PULLUP);
   pinMode(ADDR2_PIN,INPUT_PULLUP);
   
   addressOffset = digitalRead(ADDR1_PIN) + 2*(digitalRead(ADDR2_PIN));
   i2c_address = i2c_base_address + addressOffset;
+
+  #ifdef SERIAL_ENABLED
+    Serial.print("I2C Address: ");
+    Serial.println(i2c_address);
+  #endif
   
   FastLED.addLeds<NEOPIXEL, PIXEL_PIN>(leds, PIXEL_NUM);
   FastLED.setBrightness(255);
@@ -200,17 +205,19 @@ void setup() {
     blinkLeds(1,CRGB::Green);
   }
 
+  if(initEncoder() == false) {
+    #ifdef SERIAL_ENABLED
+      Serial.print("Encoder Init Failed!");
+    #endif
+    while(true) { blinkLeds(1,CRGB::Red); }
+  }
+
   //signal address
   if(i2c_address >= i2c_base_address && i2c_address < i2c_base_address + 4) {
     blinkLeds(i2c_address - i2c_base_address + 1,CRGB::White);
   }
   
   delay(500);
-  
-  #ifdef SERIAL_ENABLED
-    Serial.begin(250000);
-    Serial.println("Count:\tDistance:");
-  #endif
 
   Wire.begin(i2c_address);
   Wire.onRequest(requestEvent);
@@ -220,18 +227,16 @@ void setup() {
 
 void loop() {
   updateEncoder();
-  updateSerial();
   updateLeds();
-  //loopTiming();   //timing seems to prevent module from working at high travel speeds. Better for now just to run as fast as possible, will revisit later.
 }
 
 void updateLeds() {
   for(int i = 0; i < PIXEL_NUM; i++) {
     switch (ledMode[i]) {
       case 0:
-        if(mINC == false && mDEC == false) { leds[i] = CRGB::Green; }
-        if(mINC == true && mDEC == true && LIN == false) { leds[i] = CRGB::Yellow; }
-        if(mINC == true && mDEC == true && LIN == true) { leds[i] = CRGB::Red; }
+        if(magStrength == I2C_MAG_SIG_GOOD) { leds[i] = CRGB::Green; }
+        else if(magStrength == I2C_MAG_SIG_MID) { leds[i] = CRGB::Yellow; }
+        else if(magStrength == I2C_MAG_SIG_BAD) { leds[i] = CRGB::Red; }
         break;
       case 1:
         leds[i] = CRGB::White;
@@ -252,7 +257,7 @@ void updateLeds() {
         leds[i].setHSV(ledHSV[0],ledHSV[1],ledHSV[2]);
         break;
       case 7:
-        leds[i].setHSV(encoderCount.val/(10*ledRate[i]),255,255);
+        leds[i].setHSV(encoderCount.val/10*ledRate[i],255,255);
         break;
     }
     leds[i].nscale8(ledBrightness[i]);
@@ -266,7 +271,6 @@ void blinkLeds(int times, const CRGB& rgb) {
     for(int j = 0; j < PIXEL_NUM; j++) {
       leds[j] = rgb;
       leds[j].nscale8(20);
-      //leds[j].nscale8(ledBrightness[j]);
     }
     FastLED.show();
     delay(500);
@@ -291,13 +295,8 @@ void requestEvent() {
       Wire.write(encoderCount.bval,4);
       break;
     case 1:
-      if(mINC == false && mDEC == false) { Wire.write(I2C_MAG_SIG_GOOD); }
-      if(mINC == true && mDEC == true && LIN == false) { Wire.write(I2C_MAG_SIG_MID); }
-      if(mINC == true && mDEC == true && LIN == true) { Wire.write(I2C_MAG_SIG_BAD); }
+      Wire.write(magStrength);
       break;
-    case 2:
-      fieldStrength.val = readMagneticFieldStrength();
-      Wire.write(fieldStrength.bval,4);
   }
 }
 
@@ -313,7 +312,7 @@ void receiveEvent(int numBytes) {
 
   switch(temp[0]) {
     case 1: 
-      offset = totalCount;
+      offset = encoderCount.val;
       break;
     case 2:
       setI2cAddress(temp[1]);
@@ -348,6 +347,13 @@ void receiveEvent(int numBytes) {
 ////////////////////////////////////////////////////////////
 //--------------------- ENCODER --------------------------//
 ////////////////////////////////////////////////////////////
+bool initEncoder() {
+
+  encWire.begin();
+
+  return true;
+}
+
 void updateEncoder() {
   count = readPosition();
 
@@ -359,18 +365,13 @@ void updateEncoder() {
 
   oldCount = count;
 
+  //make the starting position 'zero'
   if(offsetInitialised == false) {
     offset = -count;
     offsetInitialised = true;
   }
 
-  totalCount = (revolutions * 4092) + (count + offset);
-  if(direction == DIR_REVERSE) { totalCount = -totalCount; }
-  encoderCount.val = totalCount;
-  //encoderCount.val = runningAverage(totalCount);
-
-  //prevMm = mm;
-  //mm = (float) (totalCount) /TICKS_PER_MM;
+  encoderCount.val = (revolutions * 4092) + (count + offset);
 
 }
 
@@ -378,76 +379,37 @@ int readPosition()
 {
   unsigned int position = 0;
 
-  //shift in our data  
-  digitalWrite(SELECT_PIN, LOW);
-  delayMicroseconds(1);
-  byte d1 = shiftIn(DATA_PIN, CLOCK_PIN);
-  byte d2 = shiftIn(DATA_PIN, CLOCK_PIN);
-  byte d3 = shiftIn(DATA_PIN, CLOCK_PIN);
-  digitalWrite(SELECT_PIN, HIGH);
+  //read in our data  
+  digitalWrite(ENC_SELECT_PIN, LOW);
+  encWire.requestFrom(ENC_ADDR,5,true);
+
+  
+  byte b1 = encWire.read();
+  byte b2 = encWire.read();
+  byte b3 = encWire.read();
+  byte b4 = encWire.read();
+  byte b5 = encWire.read();
+  
+  digitalWrite(ENC_SELECT_PIN, HIGH);
 
   //get our position variable
-  position = d1;
+  position = b1;
   position = position << 8;
 
-  position |= d2;
+  position |= b2;
   position = position >> 4;
 
-  if (!(d2 & B00001000))
-    OCF = true;
+  byte mIncrDecr = bitRead(b2,0);
+  byte linAlarm = bitRead(b2,1);
+  byte cordicOverflow = bitRead(b2,2);
+  byte offsetComp = bitRead(b2,3);
 
-  if (!(d2 & B00000100))
-    COF = true;
-
-  LIN = bitRead(d2,1);
-
-  mINC = bitRead(d2,0);
-
-  mDEC = bitRead(d3,7);
+  //determine magnetic signal strength
+  if(b4 >= (0x3F-MAG_GOOD_RANGE) && b4 <= (0x3F+MAG_GOOD_RANGE)) { magStrength = I2C_MAG_SIG_GOOD; }
+  else if(b4 >= 0x20 && b4 <= 0x5F) { magStrength = I2C_MAG_SIG_MID; }
+  else if(b4 < 0x20 || b4 > 0x5F) { magStrength = I2C_MAG_SIG_BAD; }
 
   return position;
-}
-
-int readMagneticFieldStrength() {
-  unsigned int field = 0;
-
-  //shift in our data  
-  digitalWrite(CLOCK_PIN, LOW);
-  digitalWrite(SELECT_PIN, LOW);
-  delayMicroseconds(1);
-  byte d1 = shiftIn(DATA_PIN, CLOCK_PIN);
-  byte d2 = shiftIn(DATA_PIN, CLOCK_PIN);
-  byte d3 = shiftIn(DATA_PIN, CLOCK_PIN);
-  digitalWrite(SELECT_PIN, HIGH);
-
-  //get our position variable
-  field = d1;
-  field = field << 8;
-
-  field |= d2;
-  field = field >> 4;
-
-  return field;
-}
-
-
-//read in a byte of data from the digital input of the board.
-byte shiftIn(byte data_pin, byte clock_pin)
-{
-  byte data = 0;
-
-  for (int i=7; i>=0; i--)
-  {
-    digitalWrite(clock_pin, LOW);
-    delayMicroseconds(1);
-    digitalWrite(clock_pin, HIGH);
-    delayMicroseconds(1);
-
-    byte bit = digitalRead(data_pin);
-    data |= (bit << i);
-  }
-
-  return data;
 }
 
 ////////////////////////////////////////////////////////////
@@ -456,18 +418,27 @@ byte shiftIn(byte data_pin, byte clock_pin)
 
 void reinitialize()
 { 
+  #ifdef SERIAL_ENABLED
+    Serial.println("Resetting EEPROM");
+  #endif
   eepromClear();
   setI2cAddress(99);
-  setLedBrightness(ledBrightness[0],ledBrightness[1]);
-  setLedMode(ledMode[0],ledMode[1]);
-  setLedRate(ledRate[0],ledRate[1]);
-  setLedSleep(ledSleep[0],ledSleep[1]);
+  for(int i = 0; i < 2; i++) {
+    setLedBrightness(i,ledBrightness[i]);
+    setLedMode(i,ledMode[i]);
+    setLedRate(i,ledRate[i]);
+    setLedSleep(i,ledSleep[i]);
+  }
+
   setLedRGB(ledRGB[0],ledRGB[1],ledRGB[2]);
   setLedHSV(ledHSV[0],ledHSV[1],ledHSV[2]);
-  setDirection(direction);
 }
 
 void eepromLoad() {
+  #ifdef SERIAL_ENABLED
+    Serial.println("Loading EEPROM");
+  #endif
+  
   byte tempAddress = EEPROM.read(EEPROM_I2C_ADDR);
 
   //check that a value has actually been set,
@@ -489,40 +460,32 @@ void eepromLoad() {
   ledHSV[0] = EEPROM.read(EEPROM_HSV1_ADDR);
   ledHSV[1] = EEPROM.read(EEPROM_HSV2_ADDR);
   ledHSV[2] = EEPROM.read(EEPROM_HSV3_ADDR);
-  direction = EEPROM.read(EEPROM_DIR_ADDR);
 }
 
 void setI2cAddress(byte i2cAddress) {
   EEPROM.put(EEPROM_I2C_ADDR, i2cAddress);
 }
 
-void setDirection(byte dir) {
-  if(dir == DIR_FORWARD || dir == DIR_REVERSE) {
-    direction = dir;
-    EEPROM.put(EEPROM_DIR_ADDR, direction);
-  }
-}
-
 void setLedBrightness(byte led, byte brightness) {
-  ledBrightness[led] = brightness;
+  ledBrightness[constrain(led,0,1)] = brightness;
   EEPROM.put(EEPROM_BRT1_ADDR, ledBrightness[0]);
   EEPROM.put(EEPROM_BRT2_ADDR, ledBrightness[1]);
 }
 
 void setLedMode(byte led, byte mode) {
-  ledMode[led] = mode;
+  ledMode[constrain(led,0,1)] = mode;
   EEPROM.put(EEPROM_MODE1_ADDR, ledMode[0]);
   EEPROM.put(EEPROM_MODE2_ADDR, ledMode[1]);
 }
 
 void setLedRate(byte led, byte rate) {
-  ledRate[led] = rate;
+  ledRate[constrain(led,0,1)] = rate;
   EEPROM.put(EEPROM_RATE1_ADDR, ledRate[0]);
   EEPROM.put(EEPROM_RATE2_ADDR, ledRate[1]);
 }
 
 void setLedSleep(byte led, byte sleep) {
-  ledSleep[led] = sleep;
+  ledSleep[constrain(led,0,1)] = sleep;
   EEPROM.put(EEPROM_SLP1_ADDR, ledSleep[0]);
   EEPROM.put(EEPROM_SLP2_ADDR, ledSleep[1]);
 }
@@ -572,7 +535,7 @@ void updateSerial() {
     Serial.println(":");
     Serial.print((revolutions * 4092) + (count + offset));
     Serial.println();
-    lastSerialTime = millis();
+    //lastSerialTime = millis();
     oldMm = mm;
 
   #endif
@@ -583,15 +546,15 @@ void updateSerial() {
 ////////////////////////////////////////////////////////////
 
 
-void loopTiming() {
-  while(micros() - lastLoopTime < LOOP_TIME_US) {
-    delayMicroseconds(20);
-  }
-  lastLoopTime = micros();
-}
+//void loopTiming() {
+//  while(micros() - lastLoopTime < LOOP_TIME_US) {
+//    delayMicroseconds(20);
+//  }
+//  lastLoopTime = micros();
+//}
 
 long runningAverage(long M) {
-  #define LM_SIZE 25
+  #define LM_SIZE 20
   static long LM[LM_SIZE];      // LastMeasurements
   static byte index = 0;
   static long sum = 0;
