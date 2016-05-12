@@ -9,40 +9,24 @@ typedef union{
 
 i2cLong encoderCount;
 
-#define ADDR 32
+#define ADDR 30
 
 void setup() {
   Wire.begin();        // join i2c bus (address optional for master)
   Serial.begin(9600);  // start serial for output
 
-  delay(3500);
-  Wire.beginTransmission(ADDR);
-  Wire.write(10);
-  Wire.write(0);
-  Wire.write(1);
-  Wire.endTransmission();
-  delay(100);
-  Wire.beginTransmission(ADDR);
-  Wire.write(11);
-  Wire.write(10);
-  Wire.write(255);
-  Wire.endTransmission();
-  delay(100);
-  Wire.beginTransmission(ADDR);
-  Wire.write(2);
-  Wire.write(32);
-  Wire.endTransmission();
-  delay(1000);
-  Wire.beginTransmission(ADDR);
-  Wire.write(10);
-  Wire.write(0);
-  Wire.write(5);
-  Wire.endTransmission();
+  delay(3000);
+  setLedParameter(10,0,1);
+  setLedParameter(10,1,1);
+  setLedParameter(11,0,5);
+  setLedParameter(11,1,5);
 
-  delay(1000);
-  setRGB(100,100,0);
-  delay(1000);
-  setRGB(0,100,100);
+  delay(500);
+  setLedParameter(10,0,0);
+  setLedParameter(10,1,0);
+  setLedParameter(11,0,50);
+  setLedParameter(11,1,50);
+  
 }
 
 void loop() {
@@ -108,6 +92,15 @@ long runningAverage(long M) {
   if (count < LM_SIZE) count++;
 
   return sum / count;
+}
+
+void setLedParameter(byte param, byte led, byte val) {
+  Wire.beginTransmission(ADDR);
+  Wire.write(param);
+  Wire.write(led);
+  Wire.write(val);
+  Wire.endTransmission();
+  delay(100);
 }
 
 void setRGB(byte r, byte g, byte b) {
