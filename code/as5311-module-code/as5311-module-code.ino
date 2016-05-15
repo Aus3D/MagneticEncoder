@@ -24,6 +24,8 @@
  *      Handy to return to hardware I2C address if required
  *      A power cycle will be required for settings to reset
  *
+ * 5: Change the direction of motion
+ *
  * 10: Sets the mode of the LEDs to the next two bytes received, 
  *    saves in EEPROM
  *
@@ -116,10 +118,14 @@
 #define EEPROM_HSV1_ADDR 13
 #define EEPROM_HSV2_ADDR 14
 #define EEPROM_HSV3_ADDR 15
+#define EEPROM_DIR_ADDR 16
 
 #define I2C_MAG_SIG_GOOD 0
 #define I2C_MAG_SIG_MID 1
 #define I2C_MAG_SIG_BAD 2
+
+#define DIR_FORWARD 0
+#define DIR_REVERSE 1
 
 
 const byte i2c_base_address = 30;
@@ -132,6 +138,7 @@ typedef union{
 }i2cLong;
 
 i2cLong encoderCount;
+i2cLong fieldStrength;
 
 long count = 0;
 long oldCount = 0;
@@ -140,6 +147,7 @@ long offset = 0;
 long totalCount = 0;
 bool offsetInitialised = false;
 long avgSpeed = 0;
+int direction = DIR_FORWARD;
 
 float mm = 0;
 float oldMm = -999;
@@ -157,7 +165,7 @@ byte addressOffset;
 
 int ledBrightness[] = {50,50};
 int ledMode[] = {0,0};
-int ledRate[] = {0,0};
+int ledRate[] = {10,10};
 int ledSleep[] = {0,0};
 
 byte ledRGB[] = {255,0,0};
@@ -244,7 +252,7 @@ void updateLeds() {
         leds[i].setHSV(ledHSV[0],ledHSV[1],ledHSV[2]);
         break;
       case 7:
-        leds[i].setHSV(totalCount/10*ledRate[i],255,255);
+        leds[i].setHSV(encoderCount.val/(10*ledRate[i]),255,255);
         break;
     }
     leds[i].nscale8(ledBrightness[i]);
@@ -287,6 +295,9 @@ void requestEvent() {
       if(mINC == true && mDEC == true && LIN == false) { Wire.write(I2C_MAG_SIG_MID); }
       if(mINC == true && mDEC == true && LIN == true) { Wire.write(I2C_MAG_SIG_BAD); }
       break;
+    case 2:
+      fieldStrength.val = readMagneticFieldStrength();
+      Wire.write(fieldStrength.bval,4);
   }
 }
 
@@ -354,10 +365,12 @@ void updateEncoder() {
   }
 
   totalCount = (revolutions * 4092) + (count + offset);
+  if(direction == DIR_REVERSE) { totalCount = -totalCount; }
   encoderCount.val = totalCount;
+  //encoderCount.val = runningAverage(totalCount);
 
-  prevMm = mm;
-  mm = (float) (totalCount) /TICKS_PER_MM;
+  //prevMm = mm;
+  //mm = (float) (totalCount) /TICKS_PER_MM;
 
 }
 
@@ -395,6 +408,28 @@ int readPosition()
   return position;
 }
 
+int readMagneticFieldStrength() {
+  unsigned int field = 0;
+
+  //shift in our data  
+  digitalWrite(CLOCK_PIN, LOW);
+  digitalWrite(SELECT_PIN, LOW);
+  delayMicroseconds(1);
+  byte d1 = shiftIn(DATA_PIN, CLOCK_PIN);
+  byte d2 = shiftIn(DATA_PIN, CLOCK_PIN);
+  byte d3 = shiftIn(DATA_PIN, CLOCK_PIN);
+  digitalWrite(SELECT_PIN, HIGH);
+
+  //get our position variable
+  field = d1;
+  field = field << 8;
+
+  field |= d2;
+  field = field >> 4;
+
+  return field;
+}
+
 
 //read in a byte of data from the digital input of the board.
 byte shiftIn(byte data_pin, byte clock_pin)
@@ -429,6 +464,7 @@ void reinitialize()
   setLedSleep(ledSleep[0],ledSleep[1]);
   setLedRGB(ledRGB[0],ledRGB[1],ledRGB[2]);
   setLedHSV(ledHSV[0],ledHSV[1],ledHSV[2]);
+  setDirection(direction);
 }
 
 void eepromLoad() {
@@ -453,36 +489,40 @@ void eepromLoad() {
   ledHSV[0] = EEPROM.read(EEPROM_HSV1_ADDR);
   ledHSV[1] = EEPROM.read(EEPROM_HSV2_ADDR);
   ledHSV[2] = EEPROM.read(EEPROM_HSV3_ADDR);
+  direction = EEPROM.read(EEPROM_DIR_ADDR);
 }
 
 void setI2cAddress(byte i2cAddress) {
   EEPROM.put(EEPROM_I2C_ADDR, i2cAddress);
 }
 
-void setLedBrightness(byte brightness1, byte brightness2) {
-  ledBrightness[0] = brightness1;
-  ledBrightness[1] = brightness2;
+void setDirection(byte dir) {
+  if(dir == DIR_FORWARD || dir == DIR_REVERSE) {
+    direction = dir;
+    EEPROM.put(EEPROM_DIR_ADDR, direction);
+  }
+}
+
+void setLedBrightness(byte led, byte brightness) {
+  ledBrightness[led] = brightness;
   EEPROM.put(EEPROM_BRT1_ADDR, ledBrightness[0]);
   EEPROM.put(EEPROM_BRT2_ADDR, ledBrightness[1]);
 }
 
-void setLedMode(byte mode1, byte mode2) {
-  ledMode[0] = mode1;
-  ledMode[1] = mode2;
+void setLedMode(byte led, byte mode) {
+  ledMode[led] = mode;
   EEPROM.put(EEPROM_MODE1_ADDR, ledMode[0]);
   EEPROM.put(EEPROM_MODE2_ADDR, ledMode[1]);
 }
 
-void setLedRate(byte rate1, byte rate2) {
-  ledRate[0] = rate1;
-  ledRate[1] = rate2;
+void setLedRate(byte led, byte rate) {
+  ledRate[led] = rate;
   EEPROM.put(EEPROM_RATE1_ADDR, ledRate[0]);
   EEPROM.put(EEPROM_RATE2_ADDR, ledRate[1]);
 }
 
-void setLedSleep(byte sleep1, byte sleep2) {
-  ledSleep[0] = sleep1;
-  ledSleep[1] = sleep2;
+void setLedSleep(byte led, byte sleep) {
+  ledSleep[led] = sleep;
   EEPROM.put(EEPROM_SLP1_ADDR, ledSleep[0]);
   EEPROM.put(EEPROM_SLP2_ADDR, ledSleep[1]);
 }
@@ -551,7 +591,7 @@ void loopTiming() {
 }
 
 long runningAverage(long M) {
-  #define LM_SIZE 20
+  #define LM_SIZE 25
   static long LM[LM_SIZE];      // LastMeasurements
   static byte index = 0;
   static long sum = 0;
