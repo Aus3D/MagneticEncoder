@@ -104,9 +104,26 @@ SoftwareWire encWire( ENC_DATA_PIN, ENC_CLOCK_PIN, true, true);
 #define ADDR1_PIN   16
 #define ADDR2_PIN   17
 
+//I2C Defines
 #define I2C_MAG_SIG_GOOD 0
 #define I2C_MAG_SIG_MID 1
 #define I2C_MAG_SIG_BAD 2
+
+#define I2C_REPORT_POSITION   0
+#define I2C_REPORT_STATUS     1
+#define I2C_REPORT_COMPILE    2
+
+#define I2C_REQ_REPORT        0
+#define I2C_RESET_COUNT       1
+#define I2C_SET_ADDR          2
+#define I2C_SET_REPORT_MODE   3
+#define I2C_CLEAR_EEPROM      4
+
+#define I2C_ENC_LED_PAR_MODE  10
+#define I2C_ENC_LED_PAR_BRT   11
+#define I2C_ENC_LED_PAR_RATE  12
+#define I2C_ENC_LED_PAR_RGB   13
+#define I2C_ENC_LED_PAR_HSV   14
 
 #define MAG_GOOD_RANGE 4
 
@@ -291,12 +308,15 @@ void blinkLeds(int times, const CRGB& rgb) {
 void requestEvent() {
 
   switch (i2c_response_mode) {
-    case 0:
+    case I2C_REPORT_POSITION:
       Wire.write(encoderCount.bval,4);
       break;
-    case 1:
+    case I2C_REPORT_STATUS:
       Wire.write(magStrength);
       break;
+    case I2C_REPORT_COMPILE:
+      reportVersion();
+      break;      
   }
 }
 
@@ -311,39 +331,33 @@ void receiveEvent(int numBytes) {
   }
 
   switch(temp[0]) {
-    case 1: 
+    case I2C_RESET_COUNT: 
       offset = encoderCount.val;
       break;
-    case 2:
+    case I2C_SET_ADDR:
       setI2cAddress(temp[1]);
       break;
-    case 3:
+    case I2C_SET_REPORT_MODE:
       i2c_response_mode = temp[1];
       break; 
-    case 4:
+    case I2C_CLEAR_EEPROM:
       eepromClear();
       break; 
-    case 5:
-      reportVersion();
-      break;
-    case 10:
+    case I2C_ENC_LED_PAR_MODE:
       setLedMode(temp[1],temp[2]);
       break;
-    case 11:
+    case I2C_ENC_LED_PAR_BRT:
       setLedBrightness(temp[1],temp[2]);
       break;  
-    case 12:
+    case I2C_ENC_LED_PAR_RGB:
       setLedRGB(temp[1],temp[2],temp[3]);
       break;   
-    case 13:
+    case I2C_ENC_LED_PAR_HSV:
       setLedHSV(temp[1],temp[2],temp[3]);
       break;   
-    case 14:
+    case I2C_ENC_LED_PAR_RATE:
       setLedRate(temp[1],temp[2]);
       break;    
-    case 15:
-      setLedSleep(temp[1],temp[2]);
-      break;   
   }  
 }
 
