@@ -323,6 +323,9 @@ void receiveEvent(int numBytes) {
     case 4:
       eepromClear();
       break; 
+    case 5:
+      reportVersion();
+      break;
     case 10:
       setLedMode(temp[1],temp[2]);
       break;
@@ -342,6 +345,13 @@ void receiveEvent(int numBytes) {
       setLedSleep(temp[1],temp[2]);
       break;   
   }  
+}
+
+void reportVersion() {
+  String versionString = "Compiled: " __DATE__ ", " __TIME__ ", " __VERSION__;
+  byte versionBytes[versionString.length() + 1];
+  versionString.getBytes(versionBytes,versionString.length() + 1);
+  Wire.write(versionBytes,versionString.length() + 1);
 }
 
 ////////////////////////////////////////////////////////////
