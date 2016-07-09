@@ -1,0 +1,21 @@
+Output: Gerber Files
+Type  : Gerber
+From  : Variant [[No Variations]] of Project [splitterBoard.PrjPcb]
+   Generated File[splitterBoard.GTL]
+   Generated File[splitterBoard.GBL]
+   Generated File[splitterBoard.GTO]
+   Generated File[splitterBoard.GTP]
+   Generated File[splitterBoard.GTS]
+   Generated File[splitterBoard.GBS]
+   Generated File[splitterBoard.GBP]
+   Generated File[splitterBoard.GBO]
+   Generated File[splitterBoard.GKO]
+   Generated File[splitterBoard.RUL]
+   Generated File[splitterBoard.EXTREP]
+   Generated File[splitterBoard.REP]
+
+
+Files Generated   : 12
+Documents Printed : 0
+
+Finished Output Generation At 8:25:03 PM On 6/27/2016
