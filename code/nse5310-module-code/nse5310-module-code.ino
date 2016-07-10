@@ -125,13 +125,19 @@ SoftwareWire encWire( ENC_DATA_PIN, ENC_CLOCK_PIN, true, true);
 #define I2C_ENC_LED_PAR_RGB   13
 #define I2C_ENC_LED_PAR_HSV   14
 
+//default I2C addresses
+#define I2C_ENCODER_PRESET_ADDR_X 30
+#define I2C_ENCODER_PRESET_ADDR_Y 31
+#define I2C_ENCODER_PRESET_ADDR_Z 32
+#define I2C_ENCODER_PRESET_ADDR_E 33
+
 #define MAG_GOOD_RANGE 4
 
 const byte i2c_base_address = 30;
 byte i2c_address;
 int i2c_response_mode = 0;
 
-#define SERIAL_ENABLED
+//#define SERIAL_ENABLED
 
 //EEPROM Setup
 #define EEPROM_I2C_ADDR 1
@@ -196,11 +202,22 @@ void setup() {
     Serial.begin(250000);
     Serial.println("Serial comms initialised");
   #endif
-  
-  pinMode(ENC_SELECT_PIN, OUTPUT);
 
+  pinMode(ENC_SELECT_PIN, OUTPUT);
   pinMode(ADDR1_PIN,INPUT_PULLUP);
   pinMode(ADDR2_PIN,INPUT_PULLUP);
+
+  FastLED.addLeds<NEOPIXEL, PIXEL_PIN>(leds, PIXEL_NUM);
+  FastLED.setBrightness(255);
+
+  if(initEncoder() == false) {
+    #ifdef SERIAL_ENABLED
+      Serial.print("Encoder Init Failed!");
+    #endif
+    while(true) { blinkLeds(1,CRGB::Red); }
+  } else {
+    blinkLeds(1,CRGB::Green);
+  }
   
   addressOffset = digitalRead(ADDR1_PIN) + 2*(digitalRead(ADDR2_PIN));
   i2c_address = i2c_base_address + addressOffset;
@@ -209,9 +226,6 @@ void setup() {
     Serial.print("I2C Address: ");
     Serial.println(i2c_address);
   #endif
-  
-  FastLED.addLeds<NEOPIXEL, PIXEL_PIN>(leds, PIXEL_NUM);
-  FastLED.setBrightness(255);
 
   if (EEPROM.read(0) != SCHEMA) {
     reinitialize();
@@ -222,16 +236,23 @@ void setup() {
     blinkLeds(1,CRGB::Green);
   }
 
-  if(initEncoder() == false) {
-    #ifdef SERIAL_ENABLED
-      Serial.print("Encoder Init Failed!");
-    #endif
-    while(true) { blinkLeds(1,CRGB::Red); }
-  }
-
   //signal address
   if(i2c_address >= i2c_base_address && i2c_address < i2c_base_address + 4) {
-    blinkLeds(i2c_address - i2c_base_address + 1,CRGB::White);
+    switch (i2c_address) {
+      case I2C_ENCODER_PRESET_ADDR_X:
+        blinkLeds(1,CRGB::Blue);
+        break;
+      case I2C_ENCODER_PRESET_ADDR_Y:
+        blinkLeds(1,CRGB::Yellow);
+        break;
+      case I2C_ENCODER_PRESET_ADDR_Z:
+        blinkLeds(1,CRGB::Orange);
+        break;
+      case I2C_ENCODER_PRESET_ADDR_E:
+        blinkLeds(1,CRGB::Magenta);
+        break;
+    }
+    //blinkLeds(i2c_address - i2c_base_address + 1,CRGB::White);
   }
   
   delay(500);
@@ -375,7 +396,19 @@ bool initEncoder() {
 
   encWire.begin();
 
-  return true;
+  //read a test byte
+  digitalWrite(ENC_SELECT_PIN, LOW);
+  encWire.requestFrom(ENC_ADDR,1,true);
+
+  int data = encWire.read();
+  
+  digitalWrite(ENC_SELECT_PIN, HIGH);
+
+  if(data == -1) {
+    return false;
+  } else {
+    return true;
+  }
 }
 
 void updateEncoder() {
