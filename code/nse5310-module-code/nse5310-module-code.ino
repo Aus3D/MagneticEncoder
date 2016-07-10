@@ -268,6 +268,8 @@ void setup() {
         break;
     }
     //blinkLeds(i2c_address - i2c_base_address + 1,CRGB::White);
+  } else {
+    blinkLeds(1,CRGB::White);
   }
   
   delay(500);
