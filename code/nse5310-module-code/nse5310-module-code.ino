@@ -92,6 +92,8 @@
 #define PIXEL_PIN   7
 #define PIXEL_NUM   2
 
+#define DISABLE_PIN 3
+
 //Encoder Setup
 #define ENC_SELECT_PIN  4
 #define ENC_CLOCK_PIN   5
@@ -206,9 +208,21 @@ void setup() {
   pinMode(ENC_SELECT_PIN, OUTPUT);
   pinMode(ADDR1_PIN,INPUT_PULLUP);
   pinMode(ADDR2_PIN,INPUT_PULLUP);
+  pinMode(DISABLE_PIN,INPUT_PULLUP);
 
   FastLED.addLeds<NEOPIXEL, PIXEL_PIN>(leds, PIXEL_NUM);
-  FastLED.setBrightness(255);
+  FastLED.setBrightness(100);
+
+  //check reset pin for permanent disable
+  if(digitalRead(DISABLE_PIN) == LOW) {
+    //crude debounce
+    delay(100);
+    if(digitalRead(DISABLE_PIN) == LOW) {
+      digitalWrite(ENC_SELECT_PIN, LOW);
+      blinkLeds(1,CRGB::White);
+      while(true);
+    }
+  }
 
   if(initEncoder() == false) {
     #ifdef SERIAL_ENABLED
@@ -230,6 +244,7 @@ void setup() {
   if (EEPROM.read(0) != SCHEMA) {
     reinitialize();
     EEPROM.write(0, SCHEMA);
+    eepromLoad();
     blinkLeds(1,CRGB::Purple);
   } else {
     eepromLoad();
@@ -266,6 +281,7 @@ void setup() {
 void loop() {
   updateEncoder();
   updateLeds();
+  watchResetPin();
 }
 
 void updateLeds() {
@@ -296,6 +312,9 @@ void updateLeds() {
         break;
       case 7:
         leds[i].setHSV(encoderCount.val/10*ledRate[i],255,255);
+        break;
+      case 8:
+        leds[i].setHSV(millis()/1000*ledRate[i],255,255);
         break;
     }
     leds[i].nscale8(ledBrightness[i]);
@@ -440,7 +459,6 @@ int readPosition()
   digitalWrite(ENC_SELECT_PIN, LOW);
   encWire.requestFrom(ENC_ADDR,5,true);
 
-  
   byte b1 = encWire.read();
   byte b2 = encWire.read();
   byte b3 = encWire.read();
@@ -627,3 +645,23 @@ long runningAverage(long M) {
 
   return sum / count;
 }
+
+void watchResetPin() {
+  //check reset pin
+  if(digitalRead(DISABLE_PIN) == LOW) {
+    
+    //crude debounce
+    delay(100);
+    
+    if(digitalRead(DISABLE_PIN) == LOW) {
+      //blink LEDs, if still shorted after this reset
+      blinkLeds(5,CRGB::White);
+      if(digitalRead(DISABLE_PIN) == LOW) {
+        reinitialize();
+        eepromLoad();
+        blinkLeds(1,CRGB::Green);
+      }
+    }
+  }
+}
+
