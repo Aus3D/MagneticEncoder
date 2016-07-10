@@ -261,7 +261,7 @@ void setup() {
         blinkLeds(1,CRGB::Yellow);
         break;
       case I2C_ENCODER_PRESET_ADDR_Z:
-        blinkLeds(1,CRGB::Orange);
+        blinkLeds(1,CRGB::Green);
         break;
       case I2C_ENCODER_PRESET_ADDR_E:
         blinkLeds(1,CRGB::Magenta);
