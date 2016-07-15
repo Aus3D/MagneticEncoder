@@ -86,8 +86,10 @@
 #include <SoftwareWire.h>
 #include <EEPROM.h>
 #include "FastLED.h"
+#include <avr/wdt.h>
 
 #define SCHEMA 5
+#define FIRMWARE_VERSION "1.0.0"
 
 #define PIXEL_PIN   7
 #define PIXEL_NUM   2
@@ -113,7 +115,7 @@ SoftwareWire encWire( ENC_DATA_PIN, ENC_CLOCK_PIN, true, true);
 
 #define I2C_REPORT_POSITION   0
 #define I2C_REPORT_STATUS     1
-#define I2C_REPORT_COMPILE    2
+#define I2C_REPORT_VERSION    2
 
 #define I2C_REQ_REPORT        0
 #define I2C_RESET_COUNT       1
@@ -198,7 +200,20 @@ byte ledHSV[] = {255,255,255};
 
 CRGB leds[PIXEL_NUM];
 
+// This function is called upon a HARDWARE RESET:
+void wdt_first(void) __attribute__((naked)) __attribute__((section(".init3")));
+ 
+// Clear SREG_I on hardware reset.
+void wdt_first(void)
+{
+  MCUSR = 0; // clear reset flags
+  wdt_disable();
+  // http://www.atmel.com/webdoc/AVRLibcReferenceManual/FAQ_1faq_softreset.html
+}
+
 void setup() {
+
+  wdt_disable();
 
   #ifdef SERIAL_ENABLED
     Serial.begin(250000);
@@ -228,10 +243,11 @@ void setup() {
     #ifdef SERIAL_ENABLED
       Serial.print("Encoder Init Failed!");
     #endif
-    while(true) { blinkLeds(1,CRGB::Red); }
-  } else {
-    blinkLeds(1,CRGB::Green);
+    while(initEncoder() == false) { blinkLeds(1,CRGB::Red); }
   }
+  
+  blinkLeds(1,CRGB::Green);
+
   
   addressOffset = digitalRead(ADDR1_PIN) + 2*(digitalRead(ADDR2_PIN));
   i2c_address = i2c_base_address + addressOffset;
@@ -272,7 +288,7 @@ void setup() {
     blinkLeds(1,CRGB::White);
   }
   
-  delay(500);
+  delay(50);
 
   Wire.begin(i2c_address);
   Wire.onRequest(requestEvent);
@@ -356,7 +372,7 @@ void requestEvent() {
     case I2C_REPORT_STATUS:
       Wire.write(magStrength);
       break;
-    case I2C_REPORT_COMPILE:
+    case I2C_REPORT_VERSION:
       reportVersion();
       break;      
   }
@@ -378,6 +394,8 @@ void receiveEvent(int numBytes) {
       break;
     case I2C_SET_ADDR:
       setI2cAddress(temp[1]);
+      blinkLeds(1,CRGB::White);
+      restart();
       break;
     case I2C_SET_REPORT_MODE:
       i2c_response_mode = temp[1];
@@ -404,10 +422,13 @@ void receiveEvent(int numBytes) {
 }
 
 void reportVersion() {
-  String versionString = "Compiled: " __DATE__ ", " __TIME__ ", " __VERSION__;
-  byte versionBytes[versionString.length() + 1];
-  versionString.getBytes(versionBytes,versionString.length() + 1);
-  Wire.write(versionBytes,versionString.length() + 1);
+
+   // 1.0.0, Jul 15 2016, 21:07:40
+  String versionString = FIRMWARE_VERSION ", " __DATE__ ", " __TIME__ ".";
+  //byte versionBytes[versionString.length() + 1];
+  //versionString.getBytes(versionBytes,versionString.length() + 1);
+  //Wire.write(versionBytes,versionString.length() + 1);
+  Wire.write(versionString.c_str());
 }
 
 ////////////////////////////////////////////////////////////
@@ -660,10 +681,18 @@ void watchResetPin() {
       blinkLeds(5,CRGB::White);
       if(digitalRead(DISABLE_PIN) == LOW) {
         reinitialize();
-        eepromLoad();
         blinkLeds(1,CRGB::Green);
+        restart();
       }
     }
   }
+}
+
+//enable the watchdog timer and loop infinitely to trigger a reset
+void restart() {
+  encWire.end();
+  delay(10);
+  wdt_enable(WDTO_500MS);
+  for(;;);
 }
 
