@@ -194,12 +194,11 @@ CRGB leds[PIXEL_NUM];
 // This function is called upon a HARDWARE RESET:
 void wdt_first(void) __attribute__((naked)) __attribute__((section(".init3")));
  
-// Clear SREG_I on hardware reset.
+// Clear SREG_I on hardware reset. Make sure watchdog is disabled on new boot.
 void wdt_first(void)
 {
   MCUSR = 0; // clear reset flags
   wdt_disable();
-  // http://www.atmel.com/webdoc/AVRLibcReferenceManual/FAQ_1faq_softreset.html
 }
 
 void setup() {
@@ -410,12 +409,8 @@ void receiveEvent(int numBytes) {
 }
 
 void reportVersion() {
-
-   // 1.0.0, Jul 15 2016, 21:07:40
+  // example: 1.0.0, Jul 15 2016, 21:07:40
   String versionString = FIRMWARE_VERSION ", " __DATE__ ", " __TIME__ ".";
-  //byte versionBytes[versionString.length() + 1];
-  //versionString.getBytes(versionBytes,versionString.length() + 1);
-  //Wire.write(versionBytes,versionString.length() + 1);
   Wire.write(versionString.c_str());
 }
 
@@ -458,9 +453,7 @@ void updateEncoder() {
     offset = -count;
     offsetInitialised = true;
   }
-
   encoderCount.val = (revolutions * 4092) + (count + offset);
-
 }
 
 int readPosition()
