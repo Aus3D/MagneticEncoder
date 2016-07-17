@@ -137,7 +137,7 @@ SoftwareWire encWire( ENC_DATA_PIN, ENC_CLOCK_PIN, true, true);
 #define I2C_UNALLOCATED_ADDRESS   0
 
 #define MAG_GOOD_RANGE 4
-#define I2C_READ_BYTES 5
+#define I2C_READ_BYTES 4
 
 const byte i2c_base_address = I2C_ENCODER_PRESET_ADDR_X;
 byte i2c_address;
@@ -483,7 +483,7 @@ int readPosition()
 
   //read in our data  
   digitalWrite(ENC_SELECT_PIN, LOW);
-  encWire.requestFrom(ENC_ADDR,5,true);
+  encWire.requestFrom(ENC_ADDR,I2C_READ_BYTES,true);
 
   byte b[I2C_READ_BYTES];
 
