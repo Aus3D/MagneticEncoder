@@ -664,7 +664,7 @@ void watchResetPin() {
 void restart() {
   encWire.end();
   delay(10);
-  wdt_enable(WDTO_500MS);
+  wdt_enable(WDTO_250MS);
   for(;;);
 }
 
