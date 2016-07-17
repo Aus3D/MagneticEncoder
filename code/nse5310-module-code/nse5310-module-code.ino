@@ -18,8 +18,8 @@
  *      0: Default, responds with encoder count
  *      1: Responds with magnetic signal strength
  *            0: Signal good, in range.
- *            1: Signal weak, edge of range (but probably useable)
- *            2: Signal weak / lost, edge / outside of range (probably not useable)
+ *            1: Signal weak, edge of range (but probably usable)
+ *            2: Signal weak / lost, edge / outside of range (probably not usable)
  *      2: Responds with firmware version + compile date / time
  *
  * 4: Clear the settings saved in EEPROM, restoring all defaults
@@ -151,7 +151,7 @@ int i2c_response_mode = 0;
 #define EEPROM_HSV2_ADDR 14
 #define EEPROM_HSV3_ADDR 15
 
-typedef union{
+typedef union {
     volatile long val;
     byte bval[4];
 }i2cLong;
@@ -182,9 +182,9 @@ unsigned long lastLoopTime = 0;
 byte addressOffset;
 
 int ledBrightness[] = {20,20};
-int ledMode[] = {0,0};
-int ledRate[] = {0,0};
-int ledSleep[] = {0,0};
+int ledMode[]       = {0,0};
+int ledRate[]       = {0,0};
+int ledSleep[]      = {0,0};
 
 byte ledRGB[] = {255,0,0};
 byte ledHSV[] = {255,255,255};
@@ -195,14 +195,12 @@ CRGB leds[PIXEL_NUM];
 void wdt_first(void) __attribute__((naked)) __attribute__((section(".init3")));
  
 // Clear SREG_I on hardware reset. Make sure watchdog is disabled on new boot.
-void wdt_first(void)
-{
+void wdt_first(void) {
   MCUSR = 0; // clear reset flags
   wdt_disable();
 }
 
 void setup() {
-
   #ifdef SERIAL_ENABLED
     Serial.begin(250000);
     Serial.println("Serial comms initialised");
@@ -236,7 +234,10 @@ void setup() {
     #ifdef SERIAL_ENABLED
       Serial.print("Encoder Init Failed!");
     #endif
-    while(initEncoder() == false) { blinkLeds(1,CRGB::Red); }
+
+    while(initEncoder() == false) {
+     blinkLeds(1,CRGB::Red); 
+    }
   } else {
     blinkLeds(1,CRGB::Green);
   }
@@ -292,7 +293,6 @@ void setup() {
   Wire.begin(i2c_address);
   Wire.onRequest(requestEvent);
   Wire.onReceive(receiveEvent);
-
 }
 
 void loop() {
@@ -305,9 +305,13 @@ void updateLeds() {
   for(int i = 0; i < PIXEL_NUM; i++) {
     switch (ledMode[i]) {
       case 0:
-        if(magStrength == I2C_MAG_SIG_GOOD) { leds[i] = CRGB::Green; }
-        else if(magStrength == I2C_MAG_SIG_MID) { leds[i] = CRGB::Yellow; }
-        else if(magStrength == I2C_MAG_SIG_BAD) { leds[i] = CRGB::Red; }
+        if(magStrength == I2C_MAG_SIG_GOOD) { 
+          leds[i] = CRGB::Green; 
+        } else if(magStrength == I2C_MAG_SIG_MID) { 
+          leds[i] = CRGB::Yellow; 
+        } else if(magStrength == I2C_MAG_SIG_BAD) {
+          leds[i] = CRGB::Red; 
+        }
         break;
       case 1:
         leds[i] = CRGB::White;
@@ -340,7 +344,6 @@ void updateLeds() {
 }
 
 void blinkLeds(int times, const CRGB& rgb) {
-  
   for(int i = 0; i < times; i++) {  
     for(int j = 0; j < PIXEL_NUM; j++) {
       leds[j] = rgb;
@@ -357,13 +360,11 @@ void blinkLeds(int times, const CRGB& rgb) {
   }
 }
 
-
 ////////////////////////////////////////////////////////////
 //----------------------- I2C ----------------------------//
 ////////////////////////////////////////////////////////////
 
 void requestEvent() {
-
   switch (i2c_response_mode) {
     case I2C_REPORT_POSITION:
       Wire.write(encoderCount.bval,4);
@@ -373,7 +374,7 @@ void requestEvent() {
       break;
     case I2C_REPORT_VERSION:
       reportVersion();
-      break;      
+      break;
   }
 }
 
@@ -388,7 +389,7 @@ void receiveEvent(int numBytes) {
   }
 
   switch(temp[0]) {
-    case I2C_RESET_COUNT: 
+    case I2C_RESET_COUNT:
       offset = encoderCount.val;
       break;
     case I2C_SET_ADDR:
@@ -430,7 +431,6 @@ void reportVersion() {
 //--------------------- ENCODER --------------------------//
 ////////////////////////////////////////////////////////////
 bool initEncoder() {
-
   encWire.begin();
 
   //read a test byte
@@ -465,11 +465,11 @@ void updateEncoder() {
     offset = -count;
     offsetInitialised = true;
   }
+
   encoderCount.val = (revolutions * 4092) + (count + offset);
 }
 
-int readPosition()
-{
+int readPosition() {
   unsigned int position = 0;
 
   //read in our data  
@@ -479,7 +479,7 @@ int readPosition()
   byte b[I2C_READ_BYTES];
 
   encWire.readBytes(b,5);
-  
+
   digitalWrite(ENC_SELECT_PIN, HIGH);
 
   //get our position variable
@@ -489,15 +489,19 @@ int readPosition()
   position |= b[1];
   position = position >> 4;
 
-  byte mIncrDecr = bitRead(b[1],0);
-  byte linAlarm = bitRead(b[1],1);
+  byte mIncrDecr      = bitRead(b[1],0);
+  byte linAlarm       = bitRead(b[1],1);
   byte cordicOverflow = bitRead(b[1],2);
-  byte offsetComp = bitRead(b[1],3);
+  byte offsetComp     = bitRead(b[1],3);
 
   //determine magnetic signal strength
-  if(b[3] >= (0x3F-MAG_GOOD_RANGE) && b[3] <= (0x3F+MAG_GOOD_RANGE)) { magStrength = I2C_MAG_SIG_GOOD; }
-  else if(b[3] >= 0x20 && b[3] <= 0x5F) { magStrength = I2C_MAG_SIG_MID; }
-  else if(b[3] < 0x20 || b[3] > 0x5F) { magStrength = I2C_MAG_SIG_BAD; }
+  if(b[3] >= (0x3F-MAG_GOOD_RANGE) && b[3] <= (0x3F+MAG_GOOD_RANGE)) { 
+    magStrength = I2C_MAG_SIG_GOOD; 
+  } else if(b[3] >= 0x20 && b[3] <= 0x5F) { 
+    magStrength = I2C_MAG_SIG_MID; 
+  } else if(b[3] < 0x20 || b[3] > 0x5F) { 
+    magStrength = I2C_MAG_SIG_BAD; 
+  }
 
   return position;
 }
@@ -506,13 +510,14 @@ int readPosition()
 //---------------------- EEPROM --------------------------//
 ////////////////////////////////////////////////////////////
 
-void reinitialize()
-{ 
+void reinitialize() {
   #ifdef SERIAL_ENABLED
     Serial.println("Resetting EEPROM");
   #endif
+
   eepromClear();
   setI2cAddress(I2C_UNALLOCATED_ADDRESS);
+
   for(int i = 0; i < 2; i++) {
     setLedBrightness(i,ledBrightness[i]);
     setLedMode(i,ledMode[i]);
@@ -635,31 +640,11 @@ void updateSerial() {
 //------------------------ MISC --------------------------//
 ////////////////////////////////////////////////////////////
 
-long runningAverage(long M) {
-  #define LM_SIZE 20
-  static long LM[LM_SIZE];      // LastMeasurements
-  static byte index = 0;
-  static long sum = 0;
-  static byte count = 0;
-
-  // keep sum updated to improve speed.
-  sum -= LM[index];
-  LM[index] = M;
-  sum += LM[index];
-  index++;
-  index = index % LM_SIZE;
-  if (count < LM_SIZE) count++;
-
-  return sum / count;
-}
-
 void watchResetPin() {
   //check reset pin
   if(digitalRead(DISABLE_PIN) == LOW) {
-    
     //crude debounce
     delay(100);
-    
     if(digitalRead(DISABLE_PIN) == LOW) {
       //blink LEDs, if still shorted after this reset
       blinkLeds(5,CRGB::White);
