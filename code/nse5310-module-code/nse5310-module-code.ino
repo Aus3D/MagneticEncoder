@@ -109,9 +109,9 @@ SoftwareWire encWire( ENC_DATA_PIN, ENC_CLOCK_PIN, true, true);
 #define ADDR2_PIN   17
 
 //I2C Defines
-#define I2C_MAG_SIG_GOOD 0
-#define I2C_MAG_SIG_MID 1
-#define I2C_MAG_SIG_BAD 2
+#define I2C_MAG_SIG_GOOD  0
+#define I2C_MAG_SIG_MID   1
+#define I2C_MAG_SIG_BAD   2
 
 #define I2C_REPORT_POSITION   0
 #define I2C_REPORT_STATUS     1
@@ -137,8 +137,9 @@ SoftwareWire encWire( ENC_DATA_PIN, ENC_CLOCK_PIN, true, true);
 #define I2C_UNALLOCATED_ADDRESS   0
 
 #define MAG_GOOD_RANGE 4
+#define I2C_READ_BYTES 5
 
-const byte i2c_base_address = 30;
+const byte i2c_base_address = I2C_ENCODER_PRESET_ADDR_X;
 byte i2c_address;
 int i2c_response_mode = 0;
 
@@ -270,7 +271,7 @@ void setup() {
   }
 
   //signal address
-  if(i2c_address >= i2c_base_address && i2c_address < i2c_base_address + 4) {
+  if(i2c_address >= I2C_ENCODER_PRESET_ADDR_X && i2c_address <= I2C_ENCODER_PRESET_ADDR_E) {
     switch (i2c_address) {
       case I2C_ENCODER_PRESET_ADDR_X:
         blinkLeds(1,CRGB::Blue);
@@ -285,7 +286,6 @@ void setup() {
         blinkLeds(1,CRGB::Magenta);
         break;
     }
-    //blinkLeds(i2c_address - i2c_base_address + 1,CRGB::White);
   } else {
     blinkLeds(1,CRGB::White);
   }
@@ -485,30 +485,28 @@ int readPosition()
   digitalWrite(ENC_SELECT_PIN, LOW);
   encWire.requestFrom(ENC_ADDR,5,true);
 
-  byte b1 = encWire.read();
-  byte b2 = encWire.read();
-  byte b3 = encWire.read();
-  byte b4 = encWire.read();
-  byte b5 = encWire.read();
+  byte b[I2C_READ_BYTES];
+
+  encWire.readBytes(b,5);
   
   digitalWrite(ENC_SELECT_PIN, HIGH);
 
   //get our position variable
-  position = b1;
+  position = b[0];
   position = position << 8;
 
-  position |= b2;
+  position |= b[1];
   position = position >> 4;
 
-  byte mIncrDecr = bitRead(b2,0);
-  byte linAlarm = bitRead(b2,1);
-  byte cordicOverflow = bitRead(b2,2);
-  byte offsetComp = bitRead(b2,3);
+  byte mIncrDecr = bitRead(b[1],0);
+  byte linAlarm = bitRead(b[1],1);
+  byte cordicOverflow = bitRead(b[1],2);
+  byte offsetComp = bitRead(b[1],3);
 
   //determine magnetic signal strength
-  if(b4 >= (0x3F-MAG_GOOD_RANGE) && b4 <= (0x3F+MAG_GOOD_RANGE)) { magStrength = I2C_MAG_SIG_GOOD; }
-  else if(b4 >= 0x20 && b4 <= 0x5F) { magStrength = I2C_MAG_SIG_MID; }
-  else if(b4 < 0x20 || b4 > 0x5F) { magStrength = I2C_MAG_SIG_BAD; }
+  if(b[3] >= (0x3F-MAG_GOOD_RANGE) && b[3] <= (0x3F+MAG_GOOD_RANGE)) { magStrength = I2C_MAG_SIG_GOOD; }
+  else if(b[3] >= 0x20 && b[3] <= 0x5F) { magStrength = I2C_MAG_SIG_MID; }
+  else if(b[3] < 0x20 || b[3] > 0x5F) { magStrength = I2C_MAG_SIG_BAD; }
 
   return position;
 }
