@@ -237,9 +237,9 @@ void setup() {
       Serial.print("Encoder Init Failed!");
     #endif
     while(initEncoder() == false) { blinkLeds(1,CRGB::Red); }
+  } else {
+    blinkLeds(1,CRGB::Green);
   }
-  
-  blinkLeds(1,CRGB::Green);
 
   //Read address pins as 2-bit number
   addressOffset = digitalRead(ADDR1_PIN) + 2*(digitalRead(ADDR2_PIN));
