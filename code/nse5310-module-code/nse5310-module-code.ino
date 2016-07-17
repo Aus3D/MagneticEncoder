@@ -1,5 +1,5 @@
 /*
- /---------------------------------------------------------------/
+/---------------------------------------------------------------/
  * Code for the Aus3D NSE5310 Magnetic Encoder I2C Module
  * Chris Barr, 2016
  * 
@@ -12,6 +12,7 @@
  * 
  * 2: Sets this modules I2C address to the next byte received, 
  *    saves in EEPROM
+ *    Module resets and rejoins bus with new address
  *    
  * 3: Set the information that will be sent on the next I2C request.
  *      0: Default, responds with encoder count
@@ -19,8 +20,9 @@
  *            0: Signal good, in range.
  *            1: Signal weak, edge of range (but probably useable)
  *            2: Signal weak / lost, edge / outside of range (probably not useable)
+ *      2: Responds with firmware version + compile date / time
  *
- * 4: Clear the settings saved in EEPROM, restorind all defaults
+ * 4: Clear the settings saved in EEPROM, restoring all defaults
  *      Handy to return to hardware I2C address if required
  *      A power cycle will be required for settings to reset
  *
@@ -40,13 +42,6 @@
  *
  * 14: Set the rate variable of the LEDs based on the next two bytes received,
  *      Rate is used in some of the different LED modes
- *
- * 15: Set the sleep time of the LEDs based on the next two bytes received,
- *      Sleep time determines how the LEDs will behave when there is no axis motion
- *            0: LED always on regardless of axis       (default)
- *            1-255: LED will turn off if there has been no significant
- *                   axis motion for this number of seconds.      
- *
  * 
  * I2C address can either be set over I2C (as shown above), or configured by cutting jumper traces on PCB.
  * If the address has been set by I2C, it can only be overridden by setting a new address over I2C, or by
@@ -61,8 +56,6 @@
  *  1    0   |   Z
  *  1    1   |   E
  *  
- *  
- *  
  *  LED Modes:
  *  
  *  0     Status indication of magnetic field
@@ -74,11 +67,6 @@
  *  6     HSV Value
  *  7     Party Mode 1
  *  8     Party Mode 2
- *  9     Party Mode 3
- *  10    Reactive Mode 1 (Speed)
- *  11    Reactive Mode 2 (Acceleration)
- *  12    Reactive Mode 3 (Direction)
- *  
  *              
  /---------------------------------------------------------------/
  */
