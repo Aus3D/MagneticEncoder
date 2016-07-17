@@ -645,14 +645,6 @@ void updateSerial() {
 //------------------------ MISC --------------------------//
 ////////////////////////////////////////////////////////////
 
-
-//void loopTiming() {
-//  while(micros() - lastLoopTime < LOOP_TIME_US) {
-//    delayMicroseconds(20);
-//  }
-//  lastLoopTime = micros();
-//}
-
 long runningAverage(long M) {
   #define LM_SIZE 20
   static long LM[LM_SIZE];      // LastMeasurements
