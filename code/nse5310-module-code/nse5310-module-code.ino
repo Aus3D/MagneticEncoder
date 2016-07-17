@@ -134,6 +134,7 @@ SoftwareWire encWire( ENC_DATA_PIN, ENC_CLOCK_PIN, true, true);
 #define I2C_ENCODER_PRESET_ADDR_Y 31
 #define I2C_ENCODER_PRESET_ADDR_Z 32
 #define I2C_ENCODER_PRESET_ADDR_E 33
+#define I2C_UNALLOCATED_ADDRESS   0
 
 #define MAG_GOOD_RANGE 4
 
@@ -457,10 +458,11 @@ void updateEncoder() {
   count = readPosition();
 
   //check if we've moved from one pole-pair to the next
-  if((count-oldCount) > 2048)
+  if((count-oldCount) > 2048) {
     revolutions -= 1;
-  if((oldCount - count) > 2048)
+  } else if((oldCount - count) > 2048) {
     revolutions += 1;
+  }
 
   oldCount = count;
 
@@ -520,7 +522,7 @@ void reinitialize()
     Serial.println("Resetting EEPROM");
   #endif
   eepromClear();
-  setI2cAddress(99);
+  setI2cAddress(I2C_UNALLOCATED_ADDRESS);
   for(int i = 0; i < 2; i++) {
     setLedBrightness(i,ledBrightness[i]);
     setLedMode(i,ledMode[i]);
@@ -541,7 +543,7 @@ void eepromLoad() {
 
   //check that a value has actually been set,
   //otherwise we use the hardware setting
-  if(tempAddress != 99) 
+  if(tempAddress != I2C_UNALLOCATED_ADDRESS) 
     i2c_address = tempAddress; 
 
   ledMode[0] = EEPROM.read(EEPROM_MODE1_ADDR);
