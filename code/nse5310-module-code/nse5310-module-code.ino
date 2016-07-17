@@ -145,6 +145,7 @@ int i2c_response_mode = 0;
 //#define SERIAL_ENABLED
 
 //EEPROM Setup
+#define EEPROM_USED_SIZE 24 //used to only clear first X bytes on initialisation. Faster than clearing whole EEPROM.
 #define EEPROM_I2C_ADDR 1
 #define EEPROM_BRT1_ADDR 2
 #define EEPROM_BRT2_ADDR 3
@@ -609,7 +610,7 @@ void setLedHSV(byte hue, byte sat, byte val) {
 }
 
 void eepromClear() {
-  for (int i = 0; i < EEPROM.length(); i++) {
+  for (int i = 0; i < EEPROM_USED_SIZE; i++) {
     EEPROM.write(i,0);
   }
 }
