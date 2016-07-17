@@ -204,8 +204,6 @@ void wdt_first(void)
 
 void setup() {
 
-  wdt_disable();
-
   #ifdef SERIAL_ENABLED
     Serial.begin(250000);
     Serial.println("Serial comms initialised");
