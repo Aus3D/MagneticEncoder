@@ -208,25 +208,30 @@ void setup() {
     Serial.println("Serial comms initialised");
   #endif
 
+  //Configure pins
   pinMode(ENC_SELECT_PIN, OUTPUT);
   pinMode(ADDR1_PIN,INPUT_PULLUP);
   pinMode(ADDR2_PIN,INPUT_PULLUP);
   pinMode(DISABLE_PIN,INPUT_PULLUP);
 
+  //Configure LEDs
   FastLED.addLeds<NEOPIXEL, PIXEL_PIN>(leds, PIXEL_NUM);
   FastLED.setBrightness(100);
 
-  //check reset pin for permanent disable
+  //Check reset pin for permanent disable
   if(digitalRead(DISABLE_PIN) == LOW) {
     //crude debounce
     delay(100);
     if(digitalRead(DISABLE_PIN) == LOW) {
+      //Set enc_select low to enable encoder I2C with external controller
       digitalWrite(ENC_SELECT_PIN, LOW);
       blinkLeds(1,CRGB::White);
+      //Halt startup and never proceed
       while(true);
     }
   }
 
+  //Initialise communication with encoder IC
   if(initEncoder() == false) {
     #ifdef SERIAL_ENABLED
       Serial.print("Encoder Init Failed!");
@@ -236,8 +241,10 @@ void setup() {
   
   blinkLeds(1,CRGB::Green);
 
-  
+  //Read address pins as 2-bit number
   addressOffset = digitalRead(ADDR1_PIN) + 2*(digitalRead(ADDR2_PIN));
+
+  //Set I2C address from value
   i2c_address = i2c_base_address + addressOffset;
 
   #ifdef SERIAL_ENABLED
@@ -245,6 +252,7 @@ void setup() {
     Serial.println(i2c_address);
   #endif
 
+  //Initialise EEPROM if first boot, otherwise read stored values
   if (EEPROM.read(0) != SCHEMA) {
     reinitialize();
     EEPROM.write(0, SCHEMA);
@@ -255,7 +263,10 @@ void setup() {
     blinkLeds(1,CRGB::Green);
   }
 
-  //signal address
+  //If a custom I2C address has been saved in EEPROM, 
+  //it has now overridden the hardware value
+
+  //Signal I2C address
   if(i2c_address >= I2C_ENCODER_PRESET_ADDR_X && i2c_address <= I2C_ENCODER_PRESET_ADDR_E) {
     switch (i2c_address) {
       case I2C_ENCODER_PRESET_ADDR_X:
@@ -277,6 +288,7 @@ void setup() {
   
   delay(50);
 
+  //Join I2C bus as slave
   Wire.begin(i2c_address);
   Wire.onRequest(requestEvent);
   Wire.onReceive(receiveEvent);
