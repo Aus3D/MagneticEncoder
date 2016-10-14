@@ -153,10 +153,6 @@ DItemRevisionGUID=
 DocumentPath=Project Outputs for nse5310-module\nse5310-module.TXT
 DItemRevisionGUID=
 
-[GeneratedDocument17]
-DocumentPath=Project Outputs for nse5310-module\Pick Place for nse5310-module.csv
-DItemRevisionGUID=
-
 [Configuration1]
 Name=Default Configuration
 ParameterCount=0
