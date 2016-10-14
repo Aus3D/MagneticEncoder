@@ -6,5 +6,5 @@ The magnetic module combines the features of the breakout board along with an on
 
 AMS have now discontinued the AS5311 IC I have been using, so I am switching to the NSE5310 - which I believe AMS intend as a replacement for the AS5311, as it has very similar capabilities. The NSE5310 module is still untested however.
 
-## License
-This work is licensed under a [Creative Commons Attribution-NonCommercial 4.0 International License](http://creativecommons.org/licenses/by-nc/4.0/).
+## Open Source
+In the spirit of the RepRap project, the magnetic encoder module is fully open source - files to manufacture or modify a board of your own are included in this repository. This project is licensed under a GPLv3 license, and anyone is free to modify it, manufacture it, sell it - as long as you share your modifications under the same license, we're good!

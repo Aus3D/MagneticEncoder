@@ -21,6 +21,7 @@
  *            1: Signal weak, edge of range (but probably usable)
  *            2: Signal weak / lost, edge / outside of range (probably not usable)
  *      2: Responds with firmware version + compile date / time
+ *      3: Responds with raw encoder reading
  *
  * 4: Clear the settings saved in EEPROM, restoring all defaults
  *      Handy to return to hardware I2C address if required
@@ -104,6 +105,7 @@ SoftwareWire encWire( ENC_DATA_PIN, ENC_CLOCK_PIN, true, true);
 #define I2C_REPORT_POSITION   0
 #define I2C_REPORT_STATUS     1
 #define I2C_REPORT_VERSION    2
+#define I2C_REPORT_RAW        3
 
 #define I2C_REQ_REPORT        0
 #define I2C_RESET_COUNT       1
@@ -157,6 +159,7 @@ typedef union {
 }i2cLong;
 
 i2cLong encoderCount;
+i2cLong rawCount;
 
 long count = 0;
 long oldCount = 0;
@@ -374,6 +377,10 @@ void requestEvent() {
       break;
     case I2C_REPORT_VERSION:
       reportVersion();
+      break;
+    case I2C_REPORT_RAW:
+      rawCount.val = count;
+      Wire.write(rawCount.bval,4);
       break;
   }
 }
