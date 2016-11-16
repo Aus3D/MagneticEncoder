@@ -1,10 +1,12 @@
 /*
 /---------------------------------------------------------------/
- * Code for the Aus3D NSE5310 Magnetic Encoder I2C Module
+ * Code for the Aus3D Magnetic Encoder I2C Module
  * Chris Barr, 2016
  * 
  * This module is designed to connect to a host device via I2C,
  * and report the current position as observed by the magnetic encoder.
+ * 
+ * This code is compatible with both AMS AS5311 and NSE-5310 magnetic encoder ICs. The relevant IC must be defined below.
  * 
  * The following I2C commands are implemented:
  *    
@@ -69,10 +71,23 @@
  *  7     Party Mode 1
  *  8     Party Mode 2
  *              
+ *              
+ *  Requires Arduino on Breadboard hardware core from this page:
+ *  https://www.arduino.cc/en/Tutorial/ArduinoToBreadboard
+ *  
+ *  For the ATmega328P with internal 8MHz clock
  /---------------------------------------------------------------/
  */
+
+#define ENCODER_TYPE_AS_5311
+//#define ENCODER_TYPE_NSE_5310
+
 #include <Wire.h>
-#include <SoftwareWire.h>
+
+#if defined(ENCODER_TYPE_NSE_5310)
+  #include <SoftwareWire.h>
+#endif
+
 #include <EEPROM.h>
 #include "FastLED.h"
 #include <avr/wdt.h>
@@ -89,9 +104,11 @@
 #define ENC_SELECT_PIN  4
 #define ENC_CLOCK_PIN   5
 #define ENC_DATA_PIN    6
-#define ENC_ADDR 0b1000000
 
-SoftwareWire encWire( ENC_DATA_PIN, ENC_CLOCK_PIN, true, true);
+#if defined(ENCODER_TYPE_NSE_5310)
+  #define ENC_ADDR 0b1000000
+  SoftwareWire encWire( ENC_DATA_PIN, ENC_CLOCK_PIN, true, true);
+#endif
 
 //I2C Slave Setup
 #define ADDR1_PIN   16
@@ -438,21 +455,25 @@ void reportVersion() {
 //--------------------- ENCODER --------------------------//
 ////////////////////////////////////////////////////////////
 bool initEncoder() {
-  encWire.begin();
-
-  //read a test byte
-  digitalWrite(ENC_SELECT_PIN, LOW);
-  encWire.requestFrom(ENC_ADDR,1,true);
-
-  int data = encWire.read();
+  #if defined(ENCODER_TYPE_NSE_5310)
+    encWire.begin();
   
-  digitalWrite(ENC_SELECT_PIN, HIGH);
-
-  if(data == -1) {
-    return false;
-  } else {
+    //read a test byte
+    digitalWrite(ENC_SELECT_PIN, LOW);
+    encWire.requestFrom(ENC_ADDR,1,true);
+  
+    int data = encWire.read();
+    
+    digitalWrite(ENC_SELECT_PIN, HIGH);
+  
+    if(data == -1) {
+      return false;
+    } else {
+      return true;
+    }
+  #else
     return true;
-  }
+  #endif
 }
 
 void updateEncoder() {
@@ -479,38 +500,91 @@ void updateEncoder() {
 int readPosition() {
   unsigned int position = 0;
 
-  //read in our data  
-  digitalWrite(ENC_SELECT_PIN, LOW);
-  encWire.requestFrom(ENC_ADDR,I2C_READ_BYTES,true);
+  #if defined(ENCODER_TYPE_NSE_5310)
+    //read in our data  
+    digitalWrite(ENC_SELECT_PIN, LOW);
+    encWire.requestFrom(ENC_ADDR,I2C_READ_BYTES,true);
+  
+    byte b[I2C_READ_BYTES];
+  
+    encWire.readBytes(b,5);
+  
+    digitalWrite(ENC_SELECT_PIN, HIGH);
+  
+    //get our position variable
+    position = b[0];
+    position = position << 8;
+  
+    position |= b[1];
+    position = position >> 4;
+  
+    byte mIncrDecr      = bitRead(b[1],0);
+    byte linAlarm       = bitRead(b[1],1);
+    byte cordicOverflow = bitRead(b[1],2);
+    byte offsetComp     = bitRead(b[1],3);
+  
+    //determine magnetic signal strength
+    if(b[3] >= (0x3F-MAG_GOOD_RANGE) && b[3] <= (0x3F+MAG_GOOD_RANGE)) { 
+      magStrength = I2C_MAG_SIG_GOOD; 
+    } else if(b[3] >= 0x20 && b[3] <= 0x5F) { 
+      magStrength = I2C_MAG_SIG_MID; 
+    } else if(b[3] < 0x20 || b[3] > 0x5F) { 
+      magStrength = I2C_MAG_SIG_BAD; 
+    }
+  #elif defined(ENCODER_TYPE_AS_5311)
+    //shift in our data  
+    digitalWrite(ENC_SELECT_PIN, LOW);
+    delayMicroseconds(1);
+    byte d1 = shiftIn(ENC_DATA_PIN, ENC_CLOCK_PIN);
+    byte d2 = shiftIn(ENC_DATA_PIN, ENC_CLOCK_PIN);
+    byte d3 = shiftIn(ENC_DATA_PIN, ENC_CLOCK_PIN);
+    digitalWrite(ENC_SELECT_PIN, HIGH);
+  
+    //get our position variable
+    position = d1;
+    position = position << 8;
+  
+    position |= d2;
+    position = position >> 4;
+  
+    if (!(d2 & B00001000)) {
+      OCF = true;
+    }
+  
+    if (!(d2 & B00000100)) {
+      COF = true;
+    }
+  
+    LIN = bitRead(d2,1);
+    mINC = bitRead(d2,0);
+    mDEC = bitRead(d3,7);
 
-  byte b[I2C_READ_BYTES];
-
-  encWire.readBytes(b,5);
-
-  digitalWrite(ENC_SELECT_PIN, HIGH);
-
-  //get our position variable
-  position = b[0];
-  position = position << 8;
-
-  position |= b[1];
-  position = position >> 4;
-
-  byte mIncrDecr      = bitRead(b[1],0);
-  byte linAlarm       = bitRead(b[1],1);
-  byte cordicOverflow = bitRead(b[1],2);
-  byte offsetComp     = bitRead(b[1],3);
-
-  //determine magnetic signal strength
-  if(b[3] >= (0x3F-MAG_GOOD_RANGE) && b[3] <= (0x3F+MAG_GOOD_RANGE)) { 
-    magStrength = I2C_MAG_SIG_GOOD; 
-  } else if(b[3] >= 0x20 && b[3] <= 0x5F) { 
-    magStrength = I2C_MAG_SIG_MID; 
-  } else if(b[3] < 0x20 || b[3] > 0x5F) { 
-    magStrength = I2C_MAG_SIG_BAD; 
-  }
+    //determine magnetic signal strength
+    if(mINC == false && mDEC == false) { magStrength = I2C_MAG_SIG_GOOD;  }
+    if(mINC == true && mDEC == true && LIN == false) { magStrength = I2C_MAG_SIG_MID;  }
+    if(mINC == true && mDEC == true && LIN == true) { magStrength = I2C_MAG_SIG_BAD;  }
+  #endif
 
   return position;
+}
+
+//read in a byte of data from the digital input of the board.
+byte shiftIn(byte data_pin, byte clock_pin)
+{
+  byte data = 0;
+
+  for (int i=7; i>=0; i--)
+  {
+    digitalWrite(clock_pin, LOW);
+    delayMicroseconds(1);
+    digitalWrite(clock_pin, HIGH);
+    delayMicroseconds(1);
+
+    byte bit = digitalRead(data_pin);
+    data |= (bit << i);
+  }
+
+  return data;
 }
 
 ////////////////////////////////////////////////////////////
@@ -666,7 +740,9 @@ void watchResetPin() {
 
 //enable the watchdog timer and loop infinitely to trigger a reset
 void restart() {
-  encWire.end();
+  #if defined(ENCODER_TYPE_NSE_5310)
+    encWire.end();
+  #endif
   delay(10);
   wdt_enable(WDTO_250MS);
   for(;;);
