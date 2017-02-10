@@ -232,6 +232,14 @@ void setup() {
   pinMode(ADDR2_PIN,INPUT_PULLUP);
   pinMode(DISABLE_PIN,INPUT_PULLUP);
 
+  #if defined(ENCODER_TYPE_AS_5311)
+    pinMode(ENC_DATA_PIN, INPUT);
+    pinMode(ENC_CLOCK_PIN, OUTPUT);
+
+    digitalWrite(ENC_CLOCK_PIN, HIGH);
+    digitalWrite(ENC_SELECT_PIN, HIGH);
+  #endif
+
   //Configure LEDs
   FastLED.addLeds<NEOPIXEL, PIXEL_PIN>(leds, PIXEL_NUM);
   FastLED.setBrightness(100);
