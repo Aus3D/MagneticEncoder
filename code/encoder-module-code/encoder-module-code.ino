@@ -501,10 +501,8 @@ void updateEncoder() {
     offset = -count;
     offsetInitialised = true;
   }
-
   encoderCount.val = (revolutions * 4092) + (count + offset);
-  encoderCount.val = (encoderCount.val & ~((long)7 << 21)) | (((long)magStrength << 22)); //clear the upper three bits of the third byte, insert the two-bit magStrength value at bits 23 and 22
-  encoderCount.val |= ((((long)1<<31) & encoderCount.val) >> 10); //shift the sign bit from bit 31 to bit 21
+  encoderCount.val = ((encoderCount.val &~((long)3 << 22)) | ((long)magStrength << 22)); //clear the upper two bits of the third byte, insert the two-bit magStrength value
 }
 
 int readPosition() {
