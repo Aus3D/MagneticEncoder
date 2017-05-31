@@ -395,7 +395,7 @@ void blinkLeds(int times, const CRGB& rgb) {
 void requestEvent() {
   switch (i2c_response_mode) {
     case I2C_REPORT_POSITION:
-      Wire.write(encoderCount.bval,4);
+      Wire.write(encoderCount.bval,3);
       break;
     case I2C_REPORT_STATUS:
       Wire.write(magStrength);
@@ -501,8 +501,8 @@ void updateEncoder() {
     offset = -count;
     offsetInitialised = true;
   }
-
   encoderCount.val = (revolutions * 4092) + (count + offset);
+  encoderCount.val = ((encoderCount.val &~((long)3 << 22)) | ((long)magStrength << 22)); //clear the upper two bits of the third byte, insert the two-bit magStrength value
 }
 
 int readPosition() {
