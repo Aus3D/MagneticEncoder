@@ -1,0 +1,1 @@
+The code for the magnetic encoder modules has been moved to its own repository [here](https://github.com/Aus3D/Magnetic-Encoder-Firmware).
